@@ -7330,7 +7330,7 @@ Function Get-MultiTextBoxInput ()
     $MultiTextBoxInputLabel.Name = "SearchTextMainLabel"
     $MultiTextBoxInputLabel.Size = [System.Drawing.Size]::New(($MultiTextBoxInputPanel.ClientSize.Width - ([MyConfig]::FormSpacer * 2)), 23)
     $MultiTextBoxInputLabel.Text = $Message
-    $MultiTextBoxInputLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+    $MultiTextBoxInputLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
     #endregion $MultiTextBoxInputLabel = [System.Windows.Forms.Label]::New()
 
     # Returns the minimum size required to display the text
@@ -15121,7 +15121,7 @@ function Update-ThreadConfiguration ()
       "Add"
       {
         $OrderedItems = [Ordered]@{ "Variable Name"= ""; "Variable Value" = "" }
-        $DialogResult = Get-MultiTextBoxInput -Title "Add Variable" -Message "Show this Sample Message Prompt to the User" -OrderedItems $OrderedItems -AllRequired
+        $DialogResult = Get-MultiTextBoxInput -Title "Add Variable" -Message "Add New Common Variable Name and Value" -OrderedItems $OrderedItems -AllRequired
         If ($DialogResult.Success)
         {
           [Void]$PILTCVariablesListBox.Items.Add([PILVariable]::New($DialogResult.OrderedItems["Variable Name"], $DialogResult.OrderedItems["Variable Value"]))
@@ -15131,7 +15131,7 @@ function Update-ThreadConfiguration ()
       "Edit"
       {
         $OrderedItems = [Ordered]@{ "Variable Name" = $PILTCVariablesListBox.SelectedItem.Name; "Variable Value" = $PILTCVariablesListBox.SelectedItem.Value }
-        $DialogResult = Get-MultiTextBoxInput -Title "Edit Variable" -Message "Show this Sample Message Prompt to the User" -OrderedItems $OrderedItems -AllRequired
+        $DialogResult = Get-MultiTextBoxInput -Title "Edit Variable" -Message "Update Common Variable Name and Value" -OrderedItems $OrderedItems -AllRequired
         If ($DialogResult.Success)
         {
           $PILTCVariablesListBox.Items.RemoveAt($PILTCVariablesListBox.SelectedIndex)
