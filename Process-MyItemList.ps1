@@ -14348,6 +14348,7 @@ Function Load-PILDataExport()
         $RichTextBox.SelectionIndent = 30
         $TmpCurRowCount = $PILItemListListView.Items.Count
         $TmpDataList = $TmpExport | Select-Object -Property $ChkColumns
+        $PILItemListListView.BeginUpdate()
         ForEach ($TmpDataItem In $TmpDataList)
         {
           $TmpName = $TmpDataItem."$($ChkColumns[0])"
@@ -14357,6 +14358,7 @@ Function Load-PILDataExport()
             ($PILItemListListView.Items.Add([System.Windows.Forms.ListViewItem]::New(@($TmpDataItem.PSObject.Properties | Select-Object -ExpandProperty Value), "StatusInfo16Icon", [MyConfig]::Colors.TextFore, [MyConfig]::Colors.TextBack, [MyConfig]::Font.Regular))).Name = $TmpName
           }
         }
+        $PILItemListListView.EndUpdate()
         Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Imported $($PILItemListListView.Items.Count - $TmpCurRowCount) List Items" -ValueFore ([MyConfig]::Colors.TextFore)
       }
       Else
@@ -17972,6 +17974,7 @@ function Start-PILTopMenuStripItemClick
       {
         $NewCount = 0
         $TmpSubItems = @("") * [MyRuntime]::MaxColumns
+        $PILItemListListView.BeginUpdate()
         ForEach ($TmpItem In $DialogResult.Items)
         {
           If (-not $PILItemListListView.Items.ContainsKey($TmpItem))
@@ -17984,6 +17987,7 @@ function Start-PILTopMenuStripItemClick
             $NewCount++
           }
         }
+        $PILItemListListView.EndUpdate()
         
         # Success
         $PILBtmStatusStrip.Items["Status"].Text = "Successfully Added $($NewCount) New Items for Processing"
@@ -18055,6 +18059,7 @@ function Start-PILTopMenuStripItemClick
           {
             $NewCount = 0
             $TmpSubItems = @("") * [MyRuntime]::MaxColumns
+            $PILItemListListView.BeginUpdate()
             ForEach ($TmpItem In $TmpItems)
             {
               If (-not $PILItemListListView.Items.ContainsKey($TmpItem))
@@ -18067,6 +18072,7 @@ function Start-PILTopMenuStripItemClick
                 $NewCount++
               }
             }
+            $PILItemListListView.EndUpdate()
             
             # Success
             $PILBtmStatusStrip.Items["Status"].Text = "Successfully Added $($NewCount) New Items for Processing"
@@ -18089,6 +18095,8 @@ function Start-PILTopMenuStripItemClick
     }
     "LoadExport"
     {
+      #region Load Exported Data
+      
       # Set Status Message
       $PILBtmStatusStrip.Items["Status"].Text = "Load Exported PIL Data"
       $PILBtmStatusStrip.Refresh()
@@ -18119,6 +18127,7 @@ function Start-PILTopMenuStripItemClick
         $PILOpenFileDialog.InitialDirectory = [System.IO.Path]::GetDirectoryName($PILOpenFileDialog.FileName)
       }
       Break
+      #endregion Load Exported Data
     }
     "TotalColumns"
     {
