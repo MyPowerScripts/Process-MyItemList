@@ -39,7 +39,7 @@ $ErrorActionPreference = "Stop"
 
 # Set $VerbosePreference to 'SilentlyContinue' for Production Deployment
 $VerbosePreference = "SilentlyContinue"
-$VerbosePreference = "Continue"
+#$VerbosePreference = "Continue"
 
 # Set $DebugPreference for Production Deployment
 $DebugPreference = "SilentlyContinue"
@@ -13147,7 +13147,9 @@ function Update-ThreadConfiguration ()
       {
         $StringBuilder = [System.Text.StringBuilder]::New("`r`n#region **** Function $($PILTCFunctionsListBox.SelectedItem.Name) ****`r`n")
         [Void]$StringBuilder.AppendLine("function $($PILTCFunctionsListBox.SelectedItem.Name) ()")
-        [Void]$StringBuilder.AppendLine(($PILTCFunctionsListBox.SelectedItem.ScriptBlock.ToString()))
+        [Void]$StringBuilder.Append("{")
+        [Void]$StringBuilder.Append(($PILTCFunctionsListBox.SelectedItem.ScriptBlock.ToString()))
+        [Void]$StringBuilder.AppendLine("}")
         [Void]$StringBuilder.AppendLine("#endregion **** Function $($PILTCFunctionsListBox.SelectedItem.Name) ****`r`n")
         [System.Windows.Forms.Clipboard]::SetText($StringBuilder.ToString())
         Break
