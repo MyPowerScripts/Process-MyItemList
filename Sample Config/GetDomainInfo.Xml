@@ -1,0 +1,85 @@
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04">
+  <Obj RefId="0">
+    <TN RefId="0">
+      <T>PILThreadConfig</T>
+      <T>System.Object</T>
+    </TN>
+    <ToString>PILThreadConfig</ToString>
+    <Props>
+      <Obj N="ColumnNames" RefId="1">
+        <TN RefId="1">
+          <T>System.String[]</T>
+          <T>System.Array</T>
+          <T>System.Object</T>
+        </TN>
+        <LST>
+          <S>Column Name 00</S>
+          <S>Column Name 01</S>
+          <S>Column Name 02</S>
+          <S>Column Name 03</S>
+          <S>Column Name 04</S>
+          <S>Column Name 05</S>
+          <S>Column Name 06</S>
+          <S>Column Name 07</S>
+          <S>Column Name 08</S>
+          <S>Column Name 09</S>
+          <S>Column Name 10</S>
+          <S>Column Name 11</S>
+          <S>Column Name 12</S>
+          <S>Column Name 13</S>
+          <S>Column Name 14</S>
+          <S>Column Name 15</S>
+          <S>Column Name 16</S>
+          <S>Column Name 17</S>
+          <S>Column Name 18</S>
+          <S>Column Name 19</S>
+        </LST>
+      </Obj>
+      <Obj N="Modules" RefId="2">
+        <TN RefId="2">
+          <T>System.Collections.Specialized.OrderedDictionary</T>
+          <T>System.Object</T>
+        </TN>
+        <DCT />
+      </Obj>
+      <Obj N="Functions" RefId="3">
+        <TN RefId="3">
+          <T>System.Collections.Hashtable</T>
+          <T>System.Object</T>
+        </TN>
+        <DCT>
+          <En>
+            <S N="Key">Get-MyADForest</S>
+            <Obj N="Value" RefId="4">
+              <TN RefId="4">
+                <T>Selected.PILFunction</T>
+                <T>System.Management.Automation.PSCustomObject</T>
+                <T>System.Object</T>
+              </TN>
+              <MS>
+                <S N="Name">Get-MyADForest</S>
+                <S N="ScriptBlock">_x000D__x000A_  &lt;#_x000D__x000A_    .SYNOPSIS_x000D__x000A_      Gets information about an Active Directory Forest._x000D__x000A_    .DESCRIPTION_x000D__x000A_      Retrieves the Active Directory Forest object either for the current forest or for a specified forest name._x000D__x000A_    .PARAMETER Name_x000D__x000A_      The name of the Active Directory forest to retrieve. This parameter is mandatory when using the "Name" parameter set._x000D__x000A_    .PARAMETER Current_x000D__x000A_      Switch parameter. If specified, retrieves the current Active Directory forest. This parameter is mandatory when using the "Current" parameter set._x000D__x000A_    .EXAMPLE_x000D__x000A_      PS C:\&gt; Get-MyADForest -Current_x000D__x000A_      Retrieves the current Active Directory forest._x000D__x000A_    .EXAMPLE_x000D__x000A_      PS C:\&gt; Get-MyADForest -Name "contoso.com"_x000D__x000A_      Retrieves the Active Directory forest with the name "contoso.com"._x000D__x000A_    .NOTES_x000D__x000A_      Original Function By Ken Sweet_x000D__x000A_  #&gt;_x000D__x000A_  [CmdletBinding(DefaultParameterSetName = "Current")]_x000D__x000A_  param (_x000D__x000A_    [parameter(Mandatory = $True, ParameterSetName = "Name")]_x000D__x000A_    [String]$Name,_x000D__x000A_    [parameter(Mandatory = $True, ParameterSetName = "Current")]_x000D__x000A_    [Switch]$Current_x000D__x000A_  )_x000D__x000A_  Write-Verbose -Message "Enter Function $($MyInvocation.MyCommand)"_x000D__x000A__x000D__x000A_  switch ($PSCmdlet.ParameterSetName)_x000D__x000A_  {_x000D__x000A_    "Name"_x000D__x000A_    {_x000D__x000A_      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Forest_x000D__x000A_      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)_x000D__x000A_      [System.DirectoryServices.ActiveDirectory.Forest]::GetForest($DirectoryContext)_x000D__x000A_      $DirectoryContext = $Null_x000D__x000A_      $DirectoryContextType = $Null_x000D__x000A_      break_x000D__x000A_    }_x000D__x000A_    "Current"_x000D__x000A_    {_x000D__x000A_      [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest()_x000D__x000A_      break_x000D__x000A_    }_x000D__x000A_  }_x000D__x000A__x000D__x000A_  Write-Verbose -Message "Exit Function $($MyInvocation.MyCommand)"_x000D__x000A_</S>
+              </MS>
+            </Obj>
+          </En>
+          <En>
+            <S N="Key">Get-MyADObject</S>
+            <Obj N="Value" RefId="5">
+              <TNRef RefId="4" />
+              <MS>
+                <S N="Name">Get-MyADObject</S>
+                <S N="ScriptBlock">_x000D__x000A_  &lt;#_x000D__x000A_    .SYNOPSIS_x000D__x000A_      Searches Active Directory and returns an AD SearchResultCollection._x000D__x000A_    .DESCRIPTION_x000D__x000A_      Performs a search in Active Directory using the specified LDAP filter and returns a SearchResultCollection. _x000D__x000A_      Supports specifying search root, server, credentials, properties to load, sorting, and paging options._x000D__x000A_    .PARAMETER LDAPFilter_x000D__x000A_      The LDAP filter string to use for the search. Defaults to (objectClass=*)._x000D__x000A_    .PARAMETER PageSize_x000D__x000A_      The number of objects to return per page. Default is 1000._x000D__x000A_    .PARAMETER SizeLimit_x000D__x000A_      The maximum number of objects to return. Default is 1000._x000D__x000A_    .PARAMETER SearchRoot_x000D__x000A_      The LDAP path to start the search from. Defaults to the current domain root._x000D__x000A_    .PARAMETER ServerName_x000D__x000A_      The name of the domain controller or server to query. If not specified, uses the default._x000D__x000A_    .PARAMETER SearchScope_x000D__x000A_      The scope of the search. Valid values are Base, OneLevel, or Subtree. Default is Subtree._x000D__x000A_    .PARAMETER Sort_x000D__x000A_      The direction to sort the results. Valid values are Ascending or Descending. Default is Ascending._x000D__x000A_    .PARAMETER SortProperty_x000D__x000A_      The property name to sort the results by._x000D__x000A_    .PARAMETER PropertiesToLoad_x000D__x000A_      An array of property names to load for each result._x000D__x000A_    .PARAMETER Credential_x000D__x000A_      The credentials to use when searching Active Directory._x000D__x000A_    .EXAMPLE_x000D__x000A_      Get-MyADObject -LDAPFilter "(objectClass=user)" -SearchRoot "OU=Users,DC=domain,DC=com"_x000D__x000A_      Searches for all user objects in the specified OU._x000D__x000A_    .EXAMPLE_x000D__x000A_      Get-MyADObject -ServerName "dc01.domain.com" -PropertiesToLoad "samaccountname","mail"_x000D__x000A_      Searches using a specific domain controller and returns only the samaccountname and mail properties._x000D__x000A_    .NOTES_x000D__x000A_      Original Function By Ken Sweet_x000D__x000A_  #&gt;_x000D__x000A_  [CmdletBinding(DefaultParameterSetName = "Default")]_x000D__x000A_  param (_x000D__x000A_    [String]$LDAPFilter = "(objectClass=*)",_x000D__x000A_    [Long]$PageSize = 1000,_x000D__x000A_    [Long]$SizeLimit = 1000,_x000D__x000A_    [String]$SearchRoot = "LDAP://$($([ADSI]'').distinguishedName)",_x000D__x000A_    [String]$ServerName,_x000D__x000A_    [ValidateSet("Base", "OneLevel", "Subtree")]_x000D__x000A_    [System.DirectoryServices.SearchScope]$SearchScope = "SubTree",_x000D__x000A_    [ValidateSet("Ascending", "Descending")]_x000D__x000A_    [System.DirectoryServices.SortDirection]$Sort = "Ascending",_x000D__x000A_    [String]$SortProperty,_x000D__x000A_    [String[]]$PropertiesToLoad,_x000D__x000A_    [PSCredential]$Credential_x000D__x000A_  )_x000D__x000A_  Write-Verbose -Message "Enter Function $($MyInvocation.MyCommand)"_x000D__x000A__x000D__x000A_  $MySearcher = [System.DirectoryServices.DirectorySearcher]::New($LDAPFilter, $PropertiesToLoad, $SearchScope)_x000D__x000A__x000D__x000A_  $MySearcher.PageSize = $PageSize_x000D__x000A_  $MySearcher.SizeLimit = $SizeLimit_x000D__x000A__x000D__x000A_  $TempSearchRoot = $SearchRoot.ToUpper()_x000D__x000A_  switch -regex ($TempSearchRoot)_x000D__x000A_  {_x000D__x000A_    "(?:LDAP|GC)://*"_x000D__x000A_    {_x000D__x000A_      if ($PSBoundParameters.ContainsKey("ServerName"))_x000D__x000A_      {_x000D__x000A_        $MySearchRoot = $TempSearchRoot -replace "(?&lt;LG&gt;(?:LDAP|GC)://)(?:[\w\d\.-]+/)?(?&lt;DN&gt;.+)", "`${LG}$($ServerName)/`${DN}"_x000D__x000A_      }_x000D__x000A_      else_x000D__x000A_      {_x000D__x000A_        $MySearchRoot = $TempSearchRoot_x000D__x000A_      }_x000D__x000A_      break_x000D__x000A_    }_x000D__x000A_    default_x000D__x000A_    {_x000D__x000A_      if ($PSBoundParameters.ContainsKey("ServerName"))_x000D__x000A_      {_x000D__x000A_        $MySearchRoot = "LDAP://$($ServerName)/$($TempSearchRoot)"_x000D__x000A_      }_x000D__x000A_      else_x000D__x000A_      {_x000D__x000A_        $MySearchRoot = "LDAP://$($TempSearchRoot)"_x000D__x000A_      }_x000D__x000A_      break_x000D__x000A_    }_x000D__x000A_  }_x000D__x000A__x000D__x000A_  if ($PSBoundParameters.ContainsKey("Credential"))_x000D__x000A_  {_x000D__x000A_    $MySearcher.SearchRoot = [System.DirectoryServices.DirectoryEntry]::New($MySearchRoot, ($Credential.UserName), (($Credential.GetNetworkCredential()).Password))_x000D__x000A_  }_x000D__x000A_  else_x000D__x000A_  {_x000D__x000A_    $MySearcher.SearchRoot = [System.DirectoryServices.DirectoryEntry]::New($MySearchRoot)_x000D__x000A_  }_x000D__x000A__x000D__x000A_  if ($PSBoundParameters.ContainsKey("SortProperty"))_x000D__x000A_  {_x000D__x000A_    $MySearcher.Sort.PropertyName = $SortProperty_x000D__x000A_    $MySearcher.Sort.Direction = $Sort_x000D__x000A_  }_x000D__x000A__x000D__x000A_  $MySearcher.FindAll()_x000D__x000A__x000D__x000A_  $MySearcher.Dispose()_x000D__x000A_  $MySearcher = $Null_x000D__x000A_  $MySearchRoot = $Null_x000D__x000A_  $TempSearchRoot = $Null_x000D__x000A__x000D__x000A_  Write-Verbose -Message "Exit Function $($MyInvocation.MyCommand)"_x000D__x000A_</S>
+              </MS>
+            </Obj>
+          </En>
+        </DCT>
+      </Obj>
+      <Obj N="Variables" RefId="6">
+        <TNRef RefId="3" />
+        <DCT />
+      </Obj>
+      <U16 N="ThreadCount">4</U16>
+      <S N="ThreadScript">&lt;#_x000D__x000A_  .SYNOPSIS_x000D__x000A_    Sample Runspace Pool Thread Script_x000D__x000A_  .DESCRIPTION_x000D__x000A_    Sample Runspace Pool Thread Script_x000D__x000A_  .PARAMETER ListViewItem_x000D__x000A_    ListViewItem Passed to the Thread Script_x000D__x000A__x000D__x000A_    This Paramter is Required in your Thread Script_x000D__x000A_  .EXAMPLE_x000D__x000A_    Test-Script.ps1 -ListViewItem $ListViewItem_x000D__x000A_  .NOTES_x000D__x000A_    Sample Thread Script_x000D__x000A__x000D__x000A_   -------------------------_x000D__x000A_   ListViewItem Status Icons_x000D__x000A_   -------------------------_x000D__x000A_   $GoodIcon = Solid Green Circle_x000D__x000A_   $BadIcon = Solid Red Circle_x000D__x000A_   $InfoIcon = Solid Blue Circle_x000D__x000A_   $CheckIcon = Checkmark_x000D__x000A_   $ErrorIcon = Red X_x000D__x000A_   $UpIcon = Green up Arrow _x000D__x000A_   $DownIcon = Red Down Arrow_x000D__x000A__x000D__x000A_#&gt;_x000D__x000A_[CmdletBinding()]_x000D__x000A_Param (_x000D__x000A_  [parameter(Mandatory = $True)]_x000D__x000A_  [System.Windows.Forms.ListViewItem]$ListViewItem_x000D__x000A_)_x000D__x000A__x000D__x000A_$ErrorActionPreference = "Stop"_x000D__x000A_$VerbosePreference = "SilentlyContinue"_x000D__x000A__x000D__x000A_# Common Columns_x000D__x000A_$StatusCol = 2_x000D__x000A_$DateTimeCol = 3_x000D__x000A_$ErrorCol = 4_x000D__x000A__x000D__x000A_# Sucess Status_x000D__x000A_$WasSuccess = $True_x000D__x000A__x000D__x000A_# Update Status_x000D__x000A_If ($WasSuccess)_x000D__x000A_{_x000D__x000A_  # Return Success_x000D__x000A_  $ListViewItem.ImageKey = $GoodIcon_x000D__x000A_  $ListViewItem.SubItems[$StatusCol].Text = "Completed"_x000D__x000A_}_x000D__x000A_Else_x000D__x000A_{_x000D__x000A_  # Return Success_x000D__x000A_  $ListViewItem.ImageKey = $BadIcon_x000D__x000A_  $ListViewItem.SubItems[$StatusCol].Text = "Error"_x000D__x000A_}_x000D__x000A__x000D__x000A_Write-Host -Object $ListViewItem.ImageKey_x000D__x000A__x000D__x000A_Exit_x000D__x000A__x000D__x000A__x000D__x000A_</S>
+    </Props>
+  </Obj>
+</Objs>

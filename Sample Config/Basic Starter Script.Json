@@ -1,0 +1,25 @@
+{
+  "Modules": {},
+  "Functions": {},
+  "Variables": {},
+  "ThreadCount": 8,
+  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n\r\n# Common Columns\r\n$ItemCol = 0\r\n$DataCol = 1\r\n$StatusCol = 2\r\n$DateTimeCol = 3\r\n$ErrorCol = 4\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$StatusCol].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Paused)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[1].Text = \"Pause\"\r\n  While ($SyncedHash.Paused)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$CurrentItem = $ListViewItem.SubItems[$ItemCol].Text\r\nTry\r\n{\r\n  \r\n  # Get / Update Shared Object / Value\r\n  If ([System.String]::IsNullOrEmpty($SyncedHash.Object))\r\n  {\r\n    $SyncedHash.Object = \"First Item\"\r\n  }\r\n  $ListViewItem.SubItems[$DataCol].Text = $SyncedHash.Object\r\n  $SyncedHash.Object = $CurrentItem\r\n  \r\n  # ---------------------------------------------------------\r\n  # Open and wait for Mutex - Limit Access to Shared Resource\r\n  # ---------------------------------------------------------\r\n  $MyMutex = [System.Threading.Mutex]::OpenExisting($Mutex)\r\n  [Void]($MyMutex.WaitOne())\r\n  \r\n  # Access / Update Shared Resources\r\n  # $CurrentItem | Out-File -Encoding ascii -FilePath \"C:\\SharedFile.txt\"\r\n  \r\n  # Release Mutex\r\n  $MyMutex.ReleaseMutex()\r\n  \r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Error\"\r\n}\r\n\r\nWrite-Host -Object $ListViewItem.ImageKey\r\n\r\nExit\r\n\r\n\r\n",
+  "ColumnNames": [
+    "Column Name 00",
+    "Column Name 01",
+    "Column Name 02",
+    "Column Name 03",
+    "Column Name 04",
+    "Column Name 05",
+    "Column Name 06",
+    "Column Name 07",
+    "Column Name 08",
+    "Column Name 09",
+    "Column Name 10",
+    "Column Name 11",
+    "Column Name 12",
+    "Column Name 13",
+    "Column Name 14",
+    "Column Name 15"
+  ]
+}

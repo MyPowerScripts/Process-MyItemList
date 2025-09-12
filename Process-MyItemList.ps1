@@ -27,8 +27,8 @@ Using namespace System.Collections.Specialized
 #>
 [CmdletBinding()]
 Param (
-  [ValidateRange(2, 24)]
-  [uint16]$MaxColumns = 16,
+  [ValidateRange(5, 24)]
+  [uint16]$StartColumns = 12,
   [String]$ConfigFile,
   [String]$ExportFile
 )
@@ -39,7 +39,7 @@ $ErrorActionPreference = "Stop"
 
 # Set $VerbosePreference to 'SilentlyContinue' for Production Deployment
 $VerbosePreference = "SilentlyContinue"
-#$VerbosePreference = "Continue"
+$VerbosePreference = "Continue"
 
 # Set $DebugPreference for Production Deployment
 $DebugPreference = "SilentlyContinue"
@@ -449,11 +449,12 @@ Class PILThreadConfig
 
 Class MyRuntime
 {
-  # Max Number of Columns
-  Static [Uint16]$MaxColumns = $MaxColumns
-  
+  # Min/Max Number of Columns
+  Static [Uint16]$MinColumns = 5
+  Static [Uint16]$MaxColumns = 24
+  Static [UInt16]$StartColumns = $StartColumns
   # Thread Configuration
-  Static [PILThreadConfig]$ThreadConfig = [PILThreadConfig]::New($MaxColumns)
+  Static [PILThreadConfig]$ThreadConfig = [PILThreadConfig]::New([MyRuntime]::StartColumns)
   
   # Path to Module Install Locatiosn
   Static [String]$AUModules = "$($ENV:ProgramFiles)\WindowsPowerShell\Modules"
@@ -470,61 +471,149 @@ Class MyRuntime
     [MyRuntime]::MaxColumns = $MaxColumns
     [MyRuntime]::ThreadConfig = [PILThreadConfig]::New($MaxColumns)
   }
+  
+  Static [String]$ConfigName = "Unknown Configuration"
 }
 
 #endregion ******** PIL Runtime  Values ********
 
+#region ******** PIL Demos ********
+
+#region $GetWorkstationInfo
+$GetWorkstationInfo = @'
+{
+  "Modules": {},
+  "Functions": {
+    "Get-MyWorkstationInfo": {
+      "Name": "Get-MyWorkstationInfo",
+      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Verify Remote Workstation is the Correct One\r\n    .DESCRIPTION\r\n      Verify Remote Workstation is the Correct One\r\n    .PARAMETER ComputerName\r\n      Name of the Computer to Verify\r\n    .PARAMETER Credential\r\n      Credentials to use when connecting to the Remote Computer\r\n    .PARAMETER Serial\r\n      Return Serial Number\r\n    .PARAMETER Mobile\r\n      Check if System is Desktop / Laptop\r\n    .INPUTS\r\n    .OUTPUTS\r\n    .EXAMPLE\r\n      Get-MyWorkstationInfo -ComputerName \"MyWorkstation\"\r\n    .NOTES\r\n      Original Script By Ken Sweet\r\n    .LINK\r\n  #\u003e\r\n  [CmdletBinding()]\r\n  param (\r\n    [parameter(Mandatory = $False, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]\r\n    [String[]]$ComputerName = [System.Environment]::MachineName,\r\n    [PSCredential]$Credential,\r\n    [Switch]$Serial,\r\n    [Switch]$Mobile\r\n  )\r\n  begin\r\n  {\r\n    Write-Verbose -Message \"Enter Function Get-MyWorkstationInfo\"\r\n\r\n    # Default Common Get-WmiObject Options\r\n    if ($PSBoundParameters.ContainsKey(\"Credential\"))\r\n    {\r\n      $Params = @{\r\n        \"ComputerName\" = $Null\r\n        \"Credential\"   = $Credential\r\n      }\r\n    }\r\n    else\r\n    {\r\n      $Params = @{\r\n        \"ComputerName\" = $Null\r\n      }\r\n    }\r\n  }\r\n  process\r\n  {\r\n    Write-Verbose -Message \"Enter Function Get-MyWorkstationInfo - Process\"\r\n\r\n    foreach ($Computer in $ComputerName)\r\n    {\r\n      # Start Setting Return Values as they are Found\r\n      $VerifyObject = [MyWorkstationInfo]::New($Computer)\r\n\r\n      # Validate ComputerName\r\n      if (($Computer -match \"^(([a-zA-Z]|[a-zA-Z][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z]|[A-Za-z][A-Za-z0-9\\-]*[A-Za-z0-9])$\") -or ($Computer -match \"(?:25[0-5]|2[0-4][0-9]|1\\d{2}|[1-9]?\\d)(?:\\.(?:25[0-5]|2[0-4][0-9]|1\\d{2}|[1-9]?\\d)){3}\"))\r\n      {\r\n        try\r\n        {\r\n          # Get IP Address from DNS, you want to do all remote checks using IP rather than ComputerName.  If you connect to a computer using the wrong name Get-WmiObject will fail and using the IP Address will not\r\n          $IPAddresses = @([System.Net.Dns]::GetHostAddresses($Computer) | Where-Object -FilterScript { $_.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork } | Select-Object -ExpandProperty IPAddressToString)\r\n          :FoundMyWork foreach ($IPAddress in $IPAddresses)\r\n          {\r\n            if ([System.Net.NetworkInformation.Ping]::New().Send($IPAddress).Status -eq [System.Net.NetworkInformation.IPStatus]::Success)\r\n            {\r\n              # Set Default Parms\r\n              $Params.ComputerName = $IPAddress\r\n\r\n              # Get ComputerSystem\r\n              [Void]($MyCompData = Get-WmiObject @Params -Class Win32_ComputerSystem)\r\n              $VerifyObject.AddComputerSystem($Computer, $IPAddress, ($MyCompData.Name), ($MyCompData.PartOfDomain), ($MyCompData.Domain), ($MyCompData.Manufacturer), ($MyCompData.Model), ($MyCompData.UserName), ($MyCompData.TotalPhysicalMemory))\r\n              $MyCompData.Dispose()\r\n\r\n              # Verify Remote Computer is the Connect Computer, No need to get any more information\r\n              if ($VerifyObject.Found)\r\n              {\r\n                # Start Secondary Job, Pass IP Address and Credentials to Job Script to make Connection to Remote Computer\r\n                [Void]($MyOSData = Get-WmiObject @Params -Class Win32_OperatingSystem)\r\n                $VerifyObject.AddOperatingSystem(($MyOSData.ProductType), ($MyOSData.Caption), ($MyOSData.CSDVersion), ($MyOSData.BuildNumber), ($MyOSData.Version), ($MyOSData.OSArchitecture), ([System.Management.ManagementDateTimeConverter]::ToDateTime($MyOSData.LocalDateTime)), ([System.Management.ManagementDateTimeConverter]::ToDateTime($MyOSData.InstallDate)), ([System.Management.ManagementDateTimeConverter]::ToDateTime($MyOSData.LastBootUpTime)))\r\n                $MyOSData.Dispose()\r\n\r\n                # Optional SerialNumber Job\r\n                if ($Serial.IsPresent)\r\n                {\r\n                  # Start Optional Job, Pass IP Address and Credentials to Job Script to make Connection to Remote Computer\r\n                  [Void]($MyBIOSData = Get-WmiObject @Params -Class Win32_Bios)\r\n                  $VerifyObject.AddSerialNumber($MyBIOSData.SerialNumber)\r\n                  $MyBIOSData.Dispose()\r\n                }\r\n\r\n                # Optional Mobile / ChassisType Job\r\n                if ($Mobile.IsPresent)\r\n                {\r\n                  # Start Optional Job, Pass IP Address and Credentials to Job Script to make Connection to Remote Computer\r\n                  [Void]($MyChassisData = Get-WmiObject @Params -Class Win32_SystemEnclosure)\r\n                  $VerifyObject.AddIsMobile($MyChassisData.ChassisTypes)\r\n                  $MyChassisData.Dispose()\r\n                }\r\n              }\r\n              else\r\n              {\r\n                $VerifyObject.UpdateStatus(\"Wrong Workstation Name\")\r\n              }\r\n              # Beak out of Loop, Verify was a Success no need to try other IP Address if any\r\n              break FoundMyWork\r\n            }\r\n          }\r\n        }\r\n        catch\r\n        {\r\n          # Workstation Not in DNS\r\n          $VerifyObject.UpdateStatus(\"Workstation Not in DNS\")\r\n        }\r\n      }\r\n      else\r\n      {\r\n        $VerifyObject.UpdateStatus(\"Invalid Computer Name\")\r\n      }\r\n\r\n      # Set End Time and Return Results\r\n      $VerifyObject.SetEndTime()\r\n    }\r\n    Write-Verbose -Message \"Exit Function Get-MyWorkstationInfo - Process\"\r\n  }\r\n  end\r\n  {\r\n    [System.GC]::Collect()\r\n    [System.GC]::WaitForPendingFinalizers()\r\n    Write-Verbose -Message \"Exit Function Get-MyWorkstationInfo\"\r\n  }\r\n"
+    }
+  },
+  "Variables": {},
+  "ThreadCount": 4,
+  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n\r\n#region class MyWorkstationInfo\r\nClass MyWorkstationInfo\r\n{\r\n  [String]$ComputerName = [Environment]::MachineName\r\n  [String]$FQDN = [Environment]::MachineName\r\n  [Bool]$Found = $False\r\n  [String]$UserName = \"\"\r\n  [String]$Domain = \"\"\r\n  [Bool]$DomainMember = $False\r\n  [int]$ProductType = 0\r\n  [String]$Manufacturer = \"\"\r\n  [String]$Model = \"\"\r\n  [Bool]$IsMobile = $False\r\n  [String]$SerialNumber = \"\"\r\n  [Long]$Memory = 0\r\n  [String]$OperatingSystem = \"\"\r\n  [String]$BuildNumber = \"\"\r\n  [String]$Version = \"\"\r\n  [String]$ServicePack = \"\"\r\n  [String]$Architecture = \"\"\r\n  [Bool]$Is64Bit = $False\r\n  [DateTime]$LocalDateTime = [DateTime]::MinValue\r\n  [DateTime]$InstallDate = [DateTime]::MinValue\r\n  [DateTime]$LastBootUpTime = [DateTime]::MinValue\r\n  [String]$IPAddress = \"\"\r\n  [String]$Status = \"Off-Line\"\r\n  [DateTime]$StartTime = [DateTime]::Now\r\n  [DateTime]$EndTime = [DateTime]::Now\r\n  \r\n  MyWorkstationInfo ([String]$ComputerName)\r\n  {\r\n    $This.ComputerName = $ComputerName.ToUpper()\r\n    $This.FQDN = $ComputerName.ToUpper()\r\n    $This.Status = \"On-Line\"\r\n  }\r\n  \r\n  [Void] AddComputerSystem ([String]$TestName, [String]$IPAddress, [String]$ComputerName, [Bool]$DomainMember, [String]$Domain, [String]$Manufacturer, [String]$Model, [String]$UserName, [Long]$Memory)\r\n  {\r\n    $This.IPAddress = $IPAddress\r\n    $This.ComputerName = \"$($ComputerName)\".ToUpper()\r\n    $This.DomainMember = $DomainMember\r\n    $This.Domain = \"$($Domain)\".ToUpper()\r\n    If ($DomainMember)\r\n    {\r\n      $This.FQDN = \"$($ComputerName).$($Domain)\".ToUpper()\r\n    }\r\n    $This.Manufacturer = $Manufacturer\r\n    $This.Model = $Model\r\n    $This.UserName = $UserName\r\n    $This.Memory = $Memory\r\n    $This.Found = ($ComputerName -eq @($TestName.Split(\".\"))[0])\r\n  }\r\n  \r\n  [Void] AddOperatingSystem ([int]$ProductType, [String]$OperatingSystem, [String]$ServicePack, [String]$BuildNumber, [String]$Version, [String]$Architecture, [DateTime]$LocalDateTime, [DateTime]$InstallDate, [DateTime]$LastBootUpTime)\r\n  {\r\n    $This.ProductType = $ProductType\r\n    $This.OperatingSystem = $OperatingSystem\r\n    $This.ServicePack = $ServicePack\r\n    $This.BuildNumber = $BuildNumber\r\n    $This.Version = $Version\r\n    $This.Architecture = $Architecture\r\n    $This.Is64Bit = ($Architecture -eq \"64-bit\")\r\n    $This.LocalDateTime = $LocalDateTime\r\n    $This.InstallDate = $InstallDate\r\n    $This.LastBootUpTime = $LastBootUpTime\r\n  }\r\n  \r\n  [Void] AddSerialNumber ([String]$SerialNumber)\r\n  {\r\n    $This.SerialNumber = $SerialNumber\r\n  }\r\n  \r\n  [Void] AddIsMobile ([Long[]]$ChassisTypes)\r\n  {\r\n    $This.IsMobile = (@(8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32) -contains $ChassisTypes[0])\r\n  }\r\n  \r\n  [Void] UpdateStatus ([String]$Status)\r\n  {\r\n    $This.Status = $Status\r\n  }\r\n  \r\n  [MyWorkstationInfo] SetEndTime ()\r\n  {\r\n    $This.EndTime = [DateTime]::Now\r\n    Return $This\r\n  }\r\n  \r\n  [TimeSpan] GetRunTime ()\r\n  {\r\n    Return ($This.EndTime - $This.StartTime)\r\n  }\r\n}\r\n#endregion class MyWorkstationInfo\r\n\r\n# Common Columns\r\n$StatusCol = 17\r\n$DateTimeCol = 18\r\n$ErrorCol = 19\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n#\r\n# One Column needs to be the Status the the Thread\r\n#  Status Messages are Customizable\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$StatusCol].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Pasue if Needed\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Paused)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Pause\"\r\n  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"g\")\r\n  While ($SyncedHash.Paused)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Termination if Needed\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Return\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"g\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# --------------------------------------------------\r\n# Get Curent List Item\r\n# --------------------------------------------------\r\n$ComputerName = $ListViewItem.SubItems[0].Text\r\n\r\n# Set Proccessing Ststus\r\n$ListViewItem.SubItems[$StatusCol].Text = \"Processing\"\r\n$ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"g\")\r\n\r\nTry\r\n{\r\n  $WorkstationInfo = Get-MyWorkstationInfo -ComputerName $ComputerName -Serial -Mobile\r\n  $WasSuccess = $WorkstationInfo.Found\r\n  \r\n  $ListViewItem.SubItems[01].Text = $WorkstationInfo.Status\r\n  $ListViewItem.SubItems[02].Text = $WorkstationInfo.IPAddress\r\n  $ListViewItem.SubItems[03].Text = $WorkstationInfo.FQDN\r\n  $ListViewItem.SubItems[04].Text = $WorkstationInfo.Domain\r\n  $ListViewItem.SubItems[05].Text = $WorkstationInfo.ComputerName\r\n  $ListViewItem.SubItems[06].Text = $WorkstationInfo.UserName\r\n  $ListViewItem.SubItems[07].Text = $WorkstationInfo.OperatingSystem\r\n  $ListViewItem.SubItems[08].Text = $WorkstationInfo.BuildNumber\r\n  $ListViewItem.SubItems[09].Text = $WorkstationInfo.Architecture\r\n  $ListViewItem.SubItems[10].Text = $WorkstationInfo.SerialNumber\r\n  $ListViewItem.SubItems[11].Text = $WorkstationInfo.Manufacturer\r\n  $ListViewItem.SubItems[12].Text = $WorkstationInfo.Model\r\n  $ListViewItem.SubItems[13].Text = $WorkstationInfo.IsMobile\r\n  $ListViewItem.SubItems[14].Text = $WorkstationInfo.Memory\r\n  $ListViewItem.SubItems[15].Text = $WorkstationInfo.InstallDate\r\n  $ListViewItem.SubItems[16].Text = $WorkstationInfo.LastBootUpTime\r\n  \r\n}\r\nCatch [System.Management.Automation.RuntimeException]\r\n{\r\n  $WasSuccess = $False\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.Message\r\n}\r\nCatch [System.Management.Automation.ErrorRecord]\r\n{\r\n  $WasSuccess = $False\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.Exception.Message\r\n}\r\nCatch\r\n{\r\n  $WasSuccess = $False\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.ToString()\r\n}\r\n\r\n\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Error\"\r\n}\r\n\r\nWrite-Host -Object $ListViewItem.ImageKey\r\n\r\nExit\r\n\r\n\r\n",
+  "ColumnNames": [
+    "Workstation",
+    "On-Line",
+    "IP Address",
+    "FQDN",
+    "Domain",
+    "Computer Name",
+    "User Name",
+    "Operating System",
+    "Build Number",
+    "Architecture",
+    "Serial Number",
+    "Manufacture",
+    "Model",
+    "IsMobile",
+    "Memory",
+    "Install Date",
+    "Last Reboot",
+    "Job Status",
+    "Date / Time",
+    "Error Message"
+  ]
+}
+'@
+#endregion $GetWorkstationInfo
+
+#region $SampleDemo
+$SampleDemo = @'
+{
+  "Modules": {},
+  "Functions": {},
+  "Variables": {},
+  "ThreadCount": 4,
+  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding(DefaultParameterSetName = \"ByValue\")]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n#\r\n# One Column needs to be the Status the the Thread\r\n#  Status Messages are Customizable\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[1].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Pasue if Needed\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Paused)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[1].Text = \"Pause\"\r\n  While ($SyncedHash.Paused)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Termination if Needed\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Return\r\n  $ListViewItem.SubItems[1].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[2].Text = [DateTime]::Now.ToString(\"g\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Set Proccessing Ststus\r\n$ListViewItem.SubItems[1].Text = \"Processing\"\r\n$ListViewItem.SubItems[2].Text = [DateTime]::Now.ToString(\"g\")\r\n$WasSuccess = $True\r\n\r\n# --------------------------------------------------\r\n# Get Curent List Item\r\n#\r\n# Coulmn 0 Always has the List Item to be Proccessed\r\n# --------------------------------------------------\r\n$CurentItem = $ListViewItem.SubItems[0].Text\r\n\r\n# --------------------------------------------------------------\r\n# Open and wait for Mutex\r\n# \r\n# This is to Pause the Thread Script if Access a Shared Resource\r\n#   and you need toi Limit to 1 Thread at a Time\r\n#\r\n# Using a Mutext is Optional\r\n# --------------------------------------------------------------\r\n$MyMutex = [System.Threading.Mutex]::OpenExisting($Mutex)\r\n[Void]($MyMutex.WaitOne())\r\n\r\n# Set Date / Time when Mutext was Opened\r\n$ListViewItem.SubItems[3].Text = [DateTime]::Now.ToString(\"g\")\r\n\r\n# --------------------------------------------------------------------------------\r\n# The Synced HashTable has an Object Property to share information between Threads\r\n# --------------------------------------------------------------------------------\r\nIf ([String]::IsNullOrEmpty($SyncedHash.Object))\r\n{\r\n  $SyncedHash.Object = \"First\"\r\n}\r\n$ListViewItem.SubItems[4].Text = $SyncedHash.Object\r\n$SyncedHash.Object = $CurentItem\r\n\r\n# Release Mutex\r\n$MyMutex.ReleaseMutex()\r\n\r\n# Random Number Generator\r\n$Random = [System.Random]::New()\r\n\r\n# ---------------------------------------------------------\r\n# Gernate a Fake Error\r\n#\r\n# Make sure to use Error Catching to make sure thread exits\r\n# ---------------------------------------------------------\r\nTry\r\n{\r\n  Switch ($Random.Next(0, 3))\r\n  {\r\n    \"0\"\r\n    {\r\n      Throw \"This is a Fake Error!\"\r\n      Break\r\n    }\r\n    \"1\"\r\n    {\r\n      Throw \"Simulated Error!\"\r\n      Break\r\n    }\r\n    \"2\"\r\n    {\r\n      Throw \"Someing Failed!\"\r\n      Break\r\n    }\r\n    \"3\"\r\n    {\r\n      Throw \"Unknown Error!\"\r\n      Break\r\n    }\r\n  }\r\n}\r\nCatch\r\n{\r\n  # Save Error Mesage\r\n  $ListViewItem.SubItems[5].Text = $Error[0].Exception.Message\r\n}\r\n\r\n\r\nFor ($I = 8; $I -lt 16; $I++)\r\n{\r\n  $ListViewItem.SubItems[$I].Text = [DateTime]::Now.ToString(\"HH:mm:ss:ffff\")\r\n  [System.Threading.Thread]::Sleep(100)\r\n}\r\n\r\n$RndValue = $Random.Next(0, 3)\r\n$ListViewItem.SubItems[6].Text = $RndValue\r\n# Random Fail Simlater\r\nIf ($RndValue -eq 0)\r\n{\r\n  $WasSuccess = $False\r\n}\r\n$ListViewItem.SubItems[7].Text = $WasSuccess\r\n\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[1].Text = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[1].Text = \"Error\"\r\n}\r\n\r\nExit\r\n\r\n\r\n",
+  "ColumnNames": [
+    "List Item",
+    "Status",
+    "Terminated Time",
+    "Open Mutex",
+    "Synced Hash",
+    "Fake Error",
+    "Random Number",
+    "WasSuccess",
+    "Update Time 01",
+    "Update Time 02",
+    "Update Time 03",
+    "Update Time 04",
+    "Update Time 05",
+    "Update Time 06",
+    "Update Time 07",
+    "Update Time 08"
+  ]
+}
+'@
+#endregion $SampleDemo
+
+$GetDomainInfo = @'
+{
+  "Modules": {},
+  "Functions": {
+    "Get-MyADForest": {
+      "Name": "Get-MyADForest",
+      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Gets information about an Active Directory Forest.\r\n    .DESCRIPTION\r\n      Retrieves the Active Directory Forest object either for the current forest or for a specified forest name.\r\n    .PARAMETER Name\r\n      The name of the Active Directory forest to retrieve. This parameter is mandatory when using the \"Name\" parameter set.\r\n    .PARAMETER Current\r\n      Switch parameter. If specified, retrieves the current Active Directory forest. This parameter is mandatory when using the \"Current\" parameter set.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADForest -Current\r\n      Retrieves the current Active Directory forest.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADForest -Name \"contoso.com\"\r\n      Retrieves the Active Directory forest with the name \"contoso.com\".\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Current\")]\r\n  param (\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Name\")]\r\n    [String]$Name,\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Current\")]\r\n    [Switch]$Current\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  switch ($PSCmdlet.ParameterSetName)\r\n  {\r\n    \"Name\"\r\n    {\r\n      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Forest\r\n      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)\r\n      [System.DirectoryServices.ActiveDirectory.Forest]::GetForest($DirectoryContext)\r\n      $DirectoryContext = $Null\r\n      $DirectoryContextType = $Null\r\n      break\r\n    }\r\n    \"Current\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest()\r\n      break\r\n    }\r\n  }\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
+    },
+    "Get-MyADObject": {
+      "Name": "Get-MyADObject",
+      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Searches Active Directory and returns an AD SearchResultCollection.\r\n    .DESCRIPTION\r\n      Performs a search in Active Directory using the specified LDAP filter and returns a SearchResultCollection. \r\n      Supports specifying search root, server, credentials, properties to load, sorting, and paging options.\r\n    .PARAMETER LDAPFilter\r\n      The LDAP filter string to use for the search. Defaults to (objectClass=*).\r\n    .PARAMETER PageSize\r\n      The number of objects to return per page. Default is 1000.\r\n    .PARAMETER SizeLimit\r\n      The maximum number of objects to return. Default is 1000.\r\n    .PARAMETER SearchRoot\r\n      The LDAP path to start the search from. Defaults to the current domain root.\r\n    .PARAMETER ServerName\r\n      The name of the domain controller or server to query. If not specified, uses the default.\r\n    .PARAMETER SearchScope\r\n      The scope of the search. Valid values are Base, OneLevel, or Subtree. Default is Subtree.\r\n    .PARAMETER Sort\r\n      The direction to sort the results. Valid values are Ascending or Descending. Default is Ascending.\r\n    .PARAMETER SortProperty\r\n      The property name to sort the results by.\r\n    .PARAMETER PropertiesToLoad\r\n      An array of property names to load for each result.\r\n    .PARAMETER Credential\r\n      The credentials to use when searching Active Directory.\r\n    .EXAMPLE\r\n      Get-MyADObject -LDAPFilter \"(objectClass=user)\" -SearchRoot \"OU=Users,DC=domain,DC=com\"\r\n      Searches for all user objects in the specified OU.\r\n    .EXAMPLE\r\n      Get-MyADObject -ServerName \"dc01.domain.com\" -PropertiesToLoad \"samaccountname\",\"mail\"\r\n      Searches using a specific domain controller and returns only the samaccountname and mail properties.\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Default\")]\r\n  param (\r\n    [String]$LDAPFilter = \"(objectClass=*)\",\r\n    [Long]$PageSize = 1000,\r\n    [Long]$SizeLimit = 1000,\r\n    [String]$SearchRoot = \"LDAP://$($([ADSI]\u0027\u0027).distinguishedName)\",\r\n    [String]$ServerName,\r\n    [ValidateSet(\"Base\", \"OneLevel\", \"Subtree\")]\r\n    [System.DirectoryServices.SearchScope]$SearchScope = \"SubTree\",\r\n    [ValidateSet(\"Ascending\", \"Descending\")]\r\n    [System.DirectoryServices.SortDirection]$Sort = \"Ascending\",\r\n    [String]$SortProperty,\r\n    [String[]]$PropertiesToLoad,\r\n    [PSCredential]$Credential\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  $MySearcher = [System.DirectoryServices.DirectorySearcher]::New($LDAPFilter, $PropertiesToLoad, $SearchScope)\r\n\r\n  $MySearcher.PageSize = $PageSize\r\n  $MySearcher.SizeLimit = $SizeLimit\r\n\r\n  $TempSearchRoot = $SearchRoot.ToUpper()\r\n  switch -regex ($TempSearchRoot)\r\n  {\r\n    \"(?:LDAP|GC)://*\"\r\n    {\r\n      if ($PSBoundParameters.ContainsKey(\"ServerName\"))\r\n      {\r\n        $MySearchRoot = $TempSearchRoot -replace \"(?\u003cLG\u003e(?:LDAP|GC)://)(?:[\\w\\d\\.-]+/)?(?\u003cDN\u003e.+)\", \"`${LG}$($ServerName)/`${DN}\"\r\n      }\r\n      else\r\n      {\r\n        $MySearchRoot = $TempSearchRoot\r\n      }\r\n      break\r\n    }\r\n    default\r\n    {\r\n      if ($PSBoundParameters.ContainsKey(\"ServerName\"))\r\n      {\r\n        $MySearchRoot = \"LDAP://$($ServerName)/$($TempSearchRoot)\"\r\n      }\r\n      else\r\n      {\r\n        $MySearchRoot = \"LDAP://$($TempSearchRoot)\"\r\n      }\r\n      break\r\n    }\r\n  }\r\n\r\n  if ($PSBoundParameters.ContainsKey(\"Credential\"))\r\n  {\r\n    $MySearcher.SearchRoot = [System.DirectoryServices.DirectoryEntry]::New($MySearchRoot, ($Credential.UserName), (($Credential.GetNetworkCredential()).Password))\r\n  }\r\n  else\r\n  {\r\n    $MySearcher.SearchRoot = [System.DirectoryServices.DirectoryEntry]::New($MySearchRoot)\r\n  }\r\n\r\n  if ($PSBoundParameters.ContainsKey(\"SortProperty\"))\r\n  {\r\n    $MySearcher.Sort.PropertyName = $SortProperty\r\n    $MySearcher.Sort.Direction = $Sort\r\n  }\r\n\r\n  $MySearcher.FindAll()\r\n\r\n  $MySearcher.Dispose()\r\n  $MySearcher = $Null\r\n  $MySearchRoot = $Null\r\n  $TempSearchRoot = $Null\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
+    }
+  },
+  "Variables": {},
+  "ThreadCount": 4,
+  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n\r\n# Common Columns\r\n$ItemCol = 0\r\n$DataCol = 1\r\n$StatusCol = 2\r\n$DateTimeCol = 3\r\n$ErrorCol = 4\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$StatusCol].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Paused)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[1].Text = \"Pause\"\r\n  While ($SyncedHash.Paused)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$CurrentItem = $ListViewItem.SubItems[$ItemCol].Text\r\nTry\r\n{\r\n  \r\n  # Get / Update Shared Object / Value\r\n  If ([System.String]::IsNullOrEmpty($SyncedHash.Object))\r\n  {\r\n    $SyncedHash.Object = \"First Item\"\r\n  }\r\n  $ListViewItem.SubItems[$DataCol].Text = $SyncedHash.Object\r\n  $SyncedHash.Object = $CurrentItem\r\n  \r\n  # ---------------------------------------------------------\r\n  # Open and wait for Mutex - Limit Access to Shared Resource\r\n  # ---------------------------------------------------------\r\n  $MyMutex = [System.Threading.Mutex]::OpenExisting($Mutex)\r\n  [Void]($MyMutex.WaitOne())\r\n  \r\n  # Access / Update Shared Resources\r\n  # $CurrentItem | Out-File -Encoding ascii -FilePath \"C:\\SharedFile.txt\"\r\n  \r\n  # Release Mutex\r\n  $MyMutex.ReleaseMutex()\r\n  \r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Error\"\r\n}\r\n\r\nWrite-Host -Object $ListViewItem.ImageKey\r\n\r\nExit\r\n\r\n\r\n",
+  "ColumnNames": [
+    "Column Name 00",
+    "Column Name 01",
+    "Column Name 02",
+    "Column Name 03",
+    "Column Name 04",
+    "Column Name 05",
+    "Column Name 06",
+    "Column Name 07",
+    "Column Name 08",
+    "Column Name 09",
+    "Column Name 10",
+    "Column Name 11"
+  ]
+}
+'@
+
+#region Basic Starter Script
+$StarterConfig = @'
+{
+  "Modules": {},
+  "Functions": {},
+  "Variables": {},
+  "ThreadCount": 8,
+  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n\r\n# Common Columns\r\n$ItemCol = 0\r\n$DataCol = 1\r\n$StatusCol = 2\r\n$DateTimeCol = 3\r\n$ErrorCol = 4\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$StatusCol].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Paused)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[1].Text = \"Pause\"\r\n  While ($SyncedHash.Paused)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$CurrentItem = $ListViewItem.SubItems[$ItemCol].Text\r\nTry\r\n{\r\n  \r\n  # Get / Update Shared Object / Value\r\n  If ([System.String]::IsNullOrEmpty($SyncedHash.Object))\r\n  {\r\n    $SyncedHash.Object = \"First Item\"\r\n  }\r\n  $ListViewItem.SubItems[$DataCol].Text = $SyncedHash.Object\r\n  $SyncedHash.Object = $CurrentItem\r\n  \r\n  # ---------------------------------------------------------\r\n  # Open and wait for Mutex - Limit Access to Shared Resource\r\n  # ---------------------------------------------------------\r\n  $MyMutex = [System.Threading.Mutex]::OpenExisting($Mutex)\r\n  [Void]($MyMutex.WaitOne())\r\n  \r\n  # Access / Update Shared Resources\r\n  # $CurrentItem | Out-File -Encoding ascii -FilePath \"C:\\SharedFile.txt\"\r\n  \r\n  # Release Mutex\r\n  $MyMutex.ReleaseMutex()\r\n  \r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Error\"\r\n}\r\n\r\nWrite-Host -Object $ListViewItem.ImageKey\r\n\r\nExit\r\n\r\n\r\n",
+  "ColumnNames": [
+    "Column Name 00",
+    "Column Name 01",
+    "Column Name 02",
+    "Column Name 03",
+    "Column Name 04",
+    "Column Name 05",
+    "Column Name 06",
+    "Column Name 07",
+    "Column Name 08",
+    "Column Name 09",
+    "Column Name 10",
+    "Column Name 11",
+    "Column Name 12",
+    "Column Name 13",
+    "Column Name 14",
+    "Column Name 15"
+  ]
+}
+'@
+#endregion Basic Starter Script
+
+#endregion ******** PIL Demos ********
+
 #region ******** My Default Enumerations ********
-
-#region ******** enum MyAnswer ********
-[Flags()]
-enum MyAnswer
-{
-  Unknown = 0
-  No      = 1
-  Yes     = 2
-  Maybe   = 3
-}
-#endregion ******** enum MyAnswer ********
-
-#region ******** enum MyDigit ********
-enum MyDigit
-{
-  Zero
-  One
-  Two
-  Three
-  Four
-  Five
-  Six
-  Seven
-  Eight
-  Nine
-}
-#endregion ******** enum MyDigit ********
-
-#region ******** enum MyBits ********
-[Flags()]
-enum MyBits
-{
-  Bit01 = 0x00000001
-  Bit02 = 0x00000002
-  Bit03 = 0x00000004
-  Bit04 = 0x00000008
-  Bit05 = 0x00000010
-  Bit06 = 0x00000020
-  Bit07 = 0x00000040
-  Bit08 = 0x00000080
-  Bit09 = 0x00000100
-  Bit10 = 0x00000200
-  Bit11 = 0x00000400
-  Bit12 = 0x00000800
-  Bit13 = 0x00001000
-  Bit14 = 0x00002000
-  Bit15 = 0x00004000
-  Bit16 = 0x00008000
-}
-#endregion ******** enum MyBits ********
 
 #region ******** enum PILColumns ********
 Enum PILColumns
@@ -557,48 +646,6 @@ Enum PILColumns
 #endregion ******** enum PILColumns ********
 
 #endregion ******** My Default Enumerations ********
-
-#region ******** My Custom Class ********
-
-#region ******** MyListItem Class ********
-Class MyListItem
-{
-  [String]$Text
-  [Object]$Value
-  [Object]$Tag
-  [MyBits]$Flags
-
-  MyListItem ([String]$Text, [Object]$Value)
-  {
-    $This.Text = $Text
-    $This.Value = $Value
-  }
-
-  MyListItem ([String]$Text, [Object]$Value, [MyBits]$Flags)
-  {
-    $This.Text = $Text
-    $This.Value = $Value
-    $This.Flags = $Flags
-  }
-
-  MyListItem ([String]$Text, [Object]$Value, [Object]$Tag)
-  {
-    $This.Text = $Text
-    $This.Value = $Value
-    $This.Tag = $Tag
-  }
-
-  MyListItem ([String]$Text, [Object]$Value, [Object]$Tag, [MyBits]$Flags)
-  {
-    $This.Text = $Text
-    $This.Value = $Value
-    $This.Tag = $Tag
-    $This.Flags = $Flags
-  }
-}
-#endregion ******** MyListItem Class ********
-
-#endregion ******** My Custom Class ********
 
 #region ******** Windows APIs ********
 
@@ -1472,172 +1519,6 @@ Add-Type -TypeDefinition $MyCode -ReferencedAssemblies "System.Windows.Forms" -D
 
 #endregion My Custom ListView Sort
 
-#region function Write-MyLogFile
-function Write-MyLogFile()
-{
-  <#
-    .SYNOPSIS
-      Writes a log entry to a specified log file with customizable severity, formatting, and output options.
-    .DESCRIPTION
-      The Write-MyLogFile function writes log messages to a file, with support for log rotation, severity levels, colored host output, and customizable log folder and file names. 
-      It is designed for flexible logging in scripts and automation tasks.
-    .PARAMETER LogFolder
-      Specifies the folder where the log file will be stored. Defaults to the script name if not specified.
-    .PARAMETER LogName
-      Specifies the name of the log file. Defaults to the script name with a .log extension.
-    .PARAMETER SystemLog
-      Switch to use the Windows system log folder for storing the log file.
-    .PARAMETER Severity
-      Specifies the severity of the log entry. Valid values are Text, Info, Good, Warning, and Error. Default is Text.
-    .PARAMETER Message
-      The message to log. This parameter is mandatory.
-    .PARAMETER Component
-      Specifies the component or source of the log entry. Defaults to the script name.
-    .PARAMETER Context
-      Additional context information for the log entry.
-    .PARAMETER Thread
-      The thread or process ID associated with the log entry. Defaults to the current process ID.
-    .PARAMETER MaxSize
-      The maximum size (in bytes) of the log file before it is rotated. Default is 52428800 (50 MB).
-    .PARAMETER OutHost
-      Switch to also write the log message to the host (console) with color.
-    .PARAMETER ColorText
-      The color used for Text severity messages in the host output. Default is Gray.
-    .PARAMETER ColorInfo
-      The color used for Info severity messages in the host output. Default is DarkCyan.
-    .PARAMETER ColorGood
-      The color used for Good severity messages in the host output. Default is DarkGreen.
-    .PARAMETER ColorWarn
-      The color used for Warning severity messages in the host output. Default is DarkYellow.
-    .PARAMETER ColorError
-      The color used for Error severity messages in the host output. Default is DarkRed.
-    .EXAMPLE
-      Write-MyLogFile -LogFolder "MyLogFolder" -Message "This is My Info Log File Message"
-    .EXAMPLE
-      Write-MyLogFile -LogFolder "MyLogFolder" -Severity "Info" -Message "This is My Info Log File Message"
-    .EXAMPLE
-      Write-MyLogFile -LogFolder "MyLogFolder" -Severity "Warning" -Message "This is My Warning Log File Message"
-    .EXAMPLE
-      Write-MyLogFile -LogFolder "MyLogFolder" -Severity "Error" -Message "This is My Error Log File Message"
-    .NOTES
-      Original Function By Ken Sweet
-  #>
-  [CmdletBinding(DefaultParameterSetName = "Default")]
-  param (
-    [parameter(Mandatory = $False, ParameterSetName = "LogFolder")]
-    [String]$LogFolder = [System.IO.Path]::GetFileNameWithoutExtension($MyInvocation.ScriptName),
-    [String]$LogName = "$([System.IO.Path]::GetFileNameWithoutExtension($MyInvocation.ScriptName)).log",
-    [parameter(Mandatory = $False, ParameterSetName = "SystemLog")]
-    [Switch]$SystemLog,
-    [ValidateSet("Text", "Info", "Good", "Warning", "Error")]
-    [String]$Severity = "Text",
-    [parameter(Mandatory = $True)]
-    [String]$Message,
-    [String]$Component = "",
-    [String]$Context = "",
-    [Int]$Thread = $PID,
-    [ValidateRange(0, 16777216)]
-    [Int]$MaxSize = 52428800,
-    [Switch]$OutHost,
-    [ConsoleColor]$ColorText = [ConsoleColor]::Gray,
-    [ConsoleColor]$ColorInfo = [ConsoleColor]::DarkCyan,
-    [ConsoleColor]$ColorGood = [ConsoleColor]::DarkGreen,
-    [ConsoleColor]$ColorWarn = [ConsoleColor]::DarkYellow,
-    [ConsoleColor]$ColorError = [ConsoleColor]::DarkRed
-  )
-  Write-Verbose -Message "Enter Function Write-MyLogFile"
-
-  switch ($PSCmdlet.ParameterSetName)
-  {
-    "LogFolder"
-    {
-      $LogPath = $LogFolder
-      break
-    }
-    "SystemLog"
-    {
-      $LogPath = "$($ENV:SystemRoot)\Logs\$($LogFolder)"
-      break
-    }
-    Default
-    {
-      $LogPath = "$($PSScriptRoot)\Logs"
-      break
-    }
-  }
-
-  if (-not [System.IO.Directory]::Exists($LogPath))
-  {
-    [Void][System.IO.Directory]::CreateDirectory($LogPath)
-  }
-  $TempFile = "$($LogPath)\$LogName"
-
-  switch ($Severity)
-  {
-    "Text"
-    {
-      $TempSeverity = 1
-      $HostColor = $ColorText
-      break
-    }
-    "Info"
-    {
-      $TempSeverity = 1
-      $HostColor = $ColorInfo
-      break
-    }
-    "Good"
-    {
-      $TempSeverity = 1
-      $HostColor = $ColorGood
-      break
-    }
-    "Warning"
-    {
-      $TempSeverity = 2
-      $HostColor = $ColorWarn
-      break
-    }
-    "Error"
-    {
-      $TempSeverity = 3
-      $HostColor = $ColorError
-      break
-    }
-  }
-
-  $TempDate = [DateTime]::Now
-
-  if (-not $PSBoundParameters.ContainsKey("Component"))
-  {
-    $TempSource = [System.IO.Path]::GetFileName($MyInvocation.ScriptName)
-    $Component = [System.IO.Path]::GetFileNameWithoutExtension($TempSource)
-  }
-
-  if ([System.IO.File]::Exists($TempFile) -and $MaxSize -gt 0)
-  {
-    if (([System.IO.FileInfo]$TempFile).Length -gt $MaxSize)
-    {
-      $TempBackup = [System.IO.Path]::ChangeExtension($TempFile, "lo_")
-      if ([System.IO.File]::Exists($TempBackup))
-      {
-        Remove-Item -Force -Path $TempBackup
-      }
-      Rename-Item -Force -Path $TempFile -NewName ([System.IO.Path]::GetFileName($TempBackup))
-    }
-  }
-
-  if ($OutHost.IsPresent)
-  {
-    Write-Host -Object "$($TempDate.ToString("yy-MM-dd HH:mm:ss")) - $($Message)" -ForegroundColor $HostColor
-  }
-
-  Add-Content -Encoding Ascii -Path $TempFile -Value ("<![LOG[{0}]LOG]!><time=`"{1}`" date=`"{2}`" component=`"{3}`" context=`"{4}`" type=`"{5}`" thread=`"{6}`" file=`"{7}`">" -f $Message, $($TempDate.ToString("HH:mm:ss.fff+000")), $($TempDate.ToString("MM-dd-yyyy")), $Component, $Context, $TempSeverity, $Thread, $TempSource)
-
-  Write-Verbose -Message "Exit Function Write-MyLogFile"
-}
-#endregion function Write-MyLogFile
-
 #region function Install-MyModule
 Function Install-MyModule ()
 {
@@ -2133,7 +2014,8 @@ function Start-MyRSPool()
   {
     # Create Default Session State
     $InitialSessionState = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
-
+    $InitialSessionState.ExecutionPolicy = [Microsoft.PowerShell.ExecutionPolicy]::RemoteSigned
+    
     # Import Modules
     if ($PSBoundParameters.ContainsKey("Modules"))
     {
@@ -2370,7 +2252,7 @@ function Close-MyRSPool()
 #endregion function Close-MyRSPool
 
 #region function Start-MyRSJob
-function Start-MyRSJob()
+Function Start-MyRSJob()
 {
   <#
     .SYNOPSIS
@@ -2401,9 +2283,9 @@ function Start-MyRSJob()
       Add new RSJobs to the Default RSPool
     .EXAMPLE
       $InputObject | Start-MyRSJob -ScriptBlock $ScriptBlock -RSPool $RSPool -JobName $JobName
-
+  
       $InputObject | Start-MyRSJob -ScriptBlock $ScriptBlock -PoolName $PoolName -JobName $JobName
-
+  
       $InputObject | Start-MyRSJob -ScriptBlock $ScriptBlock -PoolID $PoolID -JobName $JobName
 
       Add new RSJobs to the Specified RSPool
@@ -2413,7 +2295,7 @@ function Start-MyRSJob()
     .LINK
   #>
   [CmdletBinding(DefaultParameterSetName = "PoolName")]
-  param (
+  Param (
     [parameter(Mandatory = $True, ParameterSetName = "RSPool")]
     [MyRSPool]$RSPool,
     [parameter(Mandatory = $False, ParameterSetName = "PoolName")]
@@ -2421,7 +2303,7 @@ function Start-MyRSJob()
     [parameter(Mandatory = $True, ParameterSetName = "PoolID")]
     [Guid]$PoolID,
     [parameter(Mandatory = $False, ValueFromPipeline = $True)]
-    [Object[]]$InputObject,
+    [Object]$InputObject,
     [String]$InputParam = "InputObject",
     [String]$JobName = "Job Name",
     [parameter(Mandatory = $True)]
@@ -2432,7 +2314,7 @@ function Start-MyRSJob()
   Begin
   {
     Write-Verbose -Message "Enter Function Start-MyRSJob Begin Block"
-
+    
     Switch ($PSCmdlet.ParameterSetName)
     {
       "RSPool" {
@@ -2451,77 +2333,74 @@ function Start-MyRSJob()
         Break;
       }
     }
-
+    
     # List for New Jobs
     $NewJobs = [System.Collections.Generic.List[MyRSJob]]::New()
-
+    
     Write-Verbose -Message "Exit Function Start-MyRSJob Begin Block"
   }
   Process
   {
     Write-Verbose -Message "Enter Function Start-MyRSJob Process Block"
-
-    if ($PSBoundParameters.ContainsKey("InputObject"))
-    {
-      ForEach ($Object in $InputObject)
-      {
-        # Create New PowerShell Instance with ScriptBlock
-        $PowerShell = ([Management.Automation.PowerShell]::Create()).AddScript($ScriptBlock)
-        # Set RunspacePool
-        $PowerShell.RunspacePool = $TempPool.RunspacePool
-        # Add Parameters
-        [Void]$PowerShell.AddParameter($InputParam, $Object)
-        if ($PSBoundParameters.ContainsKey("Parameters"))
-        {
-          [Void]$PowerShell.AddParameters($Parameters)
-        }
-        # set Job Name
-        if (($Object -is [String]) -or ($Object -is [ValueType]))
-        {
-          $TempJobName = "$JobName - $($Object)"
-        }
-        else
-        {
-          $TempJobName = $($Object.$JobName)
-        }
-        [Void]$NewJobs.Add(([MyRSjob]::New($TempJobName, $PowerShell, $PowerShell.BeginInvoke(), $Object, $TempPool.Name, $TempPool.InstanceID)))
-      }
-    }
-    else
+    
+    If ($PSBoundParameters.ContainsKey("InputObject"))
     {
       # Create New PowerShell Instance with ScriptBlock
       $PowerShell = ([Management.Automation.PowerShell]::Create()).AddScript($ScriptBlock)
       # Set RunspacePool
       $PowerShell.RunspacePool = $TempPool.RunspacePool
       # Add Parameters
-      if ($PSBoundParameters.ContainsKey("Parameters"))
+      [Void]$PowerShell.AddParameter($InputParam, $InputObject)
+      If ($PSBoundParameters.ContainsKey("Parameters"))
+      {
+        [Void]$PowerShell.AddParameters($Parameters)
+      }
+      # set Job Name
+      If (($Object -is [String]) -or ($Object -is [ValueType]))
+      {
+        $TempJobName = "$JobName - $($Object)"
+      }
+      Else
+      {
+        $TempJobName = $($Object.$JobName)
+      }
+      [Void]$NewJobs.Add(([MyRSjob]::New($TempJobName, $PowerShell, $PowerShell.BeginInvoke(), $Object, $TempPool.Name, $TempPool.InstanceID)))
+    }
+    Else
+    {
+      # Create New PowerShell Instance with ScriptBlock
+      $PowerShell = ([Management.Automation.PowerShell]::Create()).AddScript($ScriptBlock)
+      # Set RunspacePool
+      $PowerShell.RunspacePool = $TempPool.RunspacePool
+      # Add Parameters
+      If ($PSBoundParameters.ContainsKey("Parameters"))
       {
         [Void]$PowerShell.AddParameters($Parameters)
       }
       [Void]$NewJobs.Add(([MyRSjob]::New($JobName, $PowerShell, $PowerShell.BeginInvoke(), $Null, $TempPool.Name, $TempPool.InstanceID)))
     }
-
+    
     Write-Verbose -Message "Exit Function Start-MyRSJob Process Block"
   }
   End
   {
     Write-Verbose -Message "Enter Function Start-MyRSJob End Block"
-
-    if ($NewJobs.Count)
+    
+    If ($NewJobs.Count)
     {
       $TempPool.Jobs.AddRange($NewJobs)
       # Return Jobs only if New RunspacePool
-      if ($PassThru.IsPresent)
+      If ($PassThru.IsPresent)
       {
-        [MyRSJob[]]($NewJobs)
+        $NewJobs
       }
       $NewJobs.Clear()
     }
-
+    
     Write-Verbose -Message "Exit Function Start-MyRSJob End Block"
   }
 }
-#endregion function Start-MyRSJob
+#endregion
 
 #region function Get-MyRSJob
 function Get-MyRSJob()
@@ -9068,6 +8947,7 @@ function Get-ListViewOption ()
     [String]$Tooltip,
     [Object[]]$Selected = "xX NONE Xx",
     [Switch]$Multi,
+    [Switch]$AllowSort,
     [Int]$Width = 50,
     [Int]$Height = 12,
     [Switch]$Filter,
@@ -9236,6 +9116,7 @@ function Get-ListViewOption ()
   $ListViewOptionListView.GridLines = $True
   $ListViewOptionListView.HeaderStyle = [System.Windows.Forms.ColumnHeaderStyle]::Nonclickable
   $ListViewOptionListView.HideSelection = $False
+  $ListViewOptionListView.ListViewItemSorter = [MyCustom.ListViewSort]::New()
   $ListViewOptionListView.Location = [System.Drawing.Point]::New([MyConfig]::FormSpacer, ($TempBottom + [MyConfig]::FormSpacer))
   $ListViewOptionListView.MultiSelect = $Multi.IsPresent
   $ListViewOptionListView.Name = "LAUListViewOptionListView"
@@ -11644,6 +11525,64 @@ Function Get-ModuleList ()
 }
 #endregion function Get-ModuleList
 
+#region function Monitor-RunspacePoolThreads
+Function Monitor-RunspacePoolThreads ()
+{
+  <#
+    .SYNOPSIS
+      Function to do something specific
+    .DESCRIPTION
+      Function to do something specific
+    .PARAMETER Value
+      Value Command Line Parameter
+    .EXAMPLE
+      Monitor-RunspacePoolThreads -Value "String"
+    .NOTES
+      Original Function By %YourName%
+      
+      %Date% - Initial Release
+  #>
+  [CmdletBinding()]
+  Param (
+  )
+  Write-Verbose -Message "Enter Function $($MyInvocation.MyCommand)"
+  
+  Try
+  {
+    # Wait for TYhreads to Exit  
+    Get-MyRSJob | Wait-MyRSJob -Wait 0
+    
+    Get-MyRSJob | Receive-MyRSJob -AutoRemove -Force | Out-Null
+    Close-MyRSPool
+  }
+  Catch
+  {
+    
+  }
+  
+  # Set Stopping ToolStrip Menu Items
+  $PILItelListToolStrip.Items["Process"].Checked = $False
+  $PILItelListToolStrip.Items["Pause"].Checked = $False
+  $PILItelListToolStrip.Items["Stop"].Checked = $False
+  $PILItelListToolStrip.SendToBack()
+  
+  # Re-Enable Main Menu Items
+  $PILTopMenuStrip.Items["AddItems"].Enabled = $True
+  $PILTopMenuStrip.Items["Configure"].Enabled = $True
+  $PILTopMenuStrip.Items["ProcessItems"].Enabled = $True
+  $PILTopMenuStrip.Items["ListData"].Enabled = $True
+  
+  # Re-Enable Right Click Menu
+  $PILItemListContextMenuStrip.Enabled = $True
+  
+  # Enable ListView Sort
+  $PILItemListListView.ListViewItemSorter.Enable = $True
+  
+  
+  Write-Verbose -Message "Exit Function $($MyInvocation.MyCommand)"
+}
+#endregion function Monitor-RunspacePoolThreads
+
 #endregion ******** PIL Custom Commands ********
 
 #region ******** PIL Custom Dialogs ********
@@ -11796,7 +11735,7 @@ Function Display-InitiliazePILUtility()
   If (-not [String]::IsNullOrEmpty($ConfigFile))
   {
     $HashTable = @{"ShowHeader" = $False; "ConfigFile" = $ConfigFile }    
-    $DialogResult = Load-PILConfigFIle -RichTextBox $RichTextBox -HashTable $HashTable
+    $DialogResult = Load-PILConfigFIleXml -RichTextBox $RichTextBox -HashTable $HashTable
   }
   
   If ($ShowHeader)
@@ -11835,8 +11774,8 @@ Function Display-InitiliazePILUtility()
 #endregion function Display-InitiliazePILUtility
 
 
-#region function Load-PILConfigFIle
-Function Load-PILConfigFIle()
+#region function Load-PILConfigFIleXml
+Function Load-PILConfigFIleXml()
 {
   <#
     .SYNOPSIS
@@ -11847,9 +11786,9 @@ Function Load-PILConfigFIle()
     .PARAMETER HashTable
       Passed Paramters HashTable
     .EXAMPLE
-      Load-PILConfigFIle -RichTextBox $RichTextBox
+      Load-PILConfigFIleXml -RichTextBox $RichTextBox
     .EXAMPLE
-      Load-PILConfigFIle -RichTextBox $RichTextBox -HashTable $HashTable
+      Load-PILConfigFIleXml -RichTextBox $RichTextBox -HashTable $HashTable
     .NOTES
       Original Script By Ken Sweet
     .LINK
@@ -11860,7 +11799,7 @@ Function Load-PILConfigFIle()
     [System.Windows.Forms.RichTextBox]$RichTextBox,
     [HashTable]$HashTable
   )
-  Write-Verbose -Message "Enter Function Load-PILConfigFIle"
+  Write-Verbose -Message "Enter Function Load-PILConfigFIleXml"
   
   $DisplayResult = [System.Windows.Forms.DialogResult]::OK
   $RichTextBox.Refresh()
@@ -11905,7 +11844,9 @@ Function Load-PILConfigFIle()
       # Add / Update PIL Columns
       $RichTextBox.SelectionIndent = 20
       Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Number of Columns" -Value ($TmpConfig.ColumnNames.Count)
+      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = $Null
       [MyRuntime]::UpdateTotalColumn($TmpConfig.ColumnNames.Count)
+      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
       $RichTextBox.SelectionIndent = 30
       $PILItemListListView.BeginUpdate()
       $PILItemListListView.Columns.Clear()
@@ -12081,9 +12022,310 @@ Function Load-PILConfigFIle()
   $DisplayResult
   $DisplayResult = $Null
   
-  Write-Verbose -Message "Exit Function Load-PILConfigFIle"
+  Write-Verbose -Message "Exit Function Load-PILConfigFIleXml"
 }
-#endregion function Load-PILConfigFIle
+#endregion function Load-PILConfigFIleXml
+
+
+#region function Load-PILConfigFIleJson
+Function Load-PILConfigFIleJson()
+{
+  <#
+    .SYNOPSIS
+      Display Utility Status Sample Function
+    .DESCRIPTION
+      Display Utility Status Sample Function
+    .PARAMETER RichTextBox
+    .PARAMETER HashTable
+      Passed Paramters HashTable
+    .EXAMPLE
+      Load-PILConfigFIleJson -RichTextBox $RichTextBox
+    .EXAMPLE
+      Load-PILConfigFIleJson -RichTextBox $RichTextBox -HashTable $HashTable
+    .NOTES
+      Original Script By Ken Sweet
+    .LINK
+  #>
+  [CmdletBinding()]
+  Param (
+    [Parameter(Mandatory = $True)]
+    [System.Windows.Forms.RichTextBox]$RichTextBox,
+    [HashTable]$HashTable
+  )
+  Write-Verbose -Message "Enter Function Load-PILConfigFIleJson"
+  
+  $DisplayResult = [System.Windows.Forms.DialogResult]::OK
+  $RichTextBox.Refresh()
+  
+  # Get Passed Values
+  $ShowHeader = $HashTable.ShowHeader
+  $ConfigFile = $HashTable.ConfigFile
+  $ConfigObject = $HashTable.ConfigObject
+  $ConfigName = $HashTable.ConfigName
+  
+  
+  $RichTextBox.SelectionIndent = 10
+  $RichTextBox.SelectionBullet = $False
+  
+  If ($ShowHeader)
+  {
+    Write-RichTextBox -RichTextBox $RichTextBox
+    Write-RichTextBox -RichTextBox $RichTextBox -Font ([MyConfig]::Font.Title) -Alignment "Center" -Text "$($RichTextBox.Parent.Parent.Text)" -TextFore ([MyConfig]::Colors.TextTitle)
+    Write-RichTextBox -RichTextBox $RichTextBox
+    
+    # Update Status Message
+    $PILBtmStatusStrip.Items["Status"].Text = $RichTextBox.Parent.Parent.Text
+    
+    # Initialize StopWatch
+    $StopWatch = [System.Diagnostics.Stopwatch]::StartNew()
+  }
+  
+  Write-RichTextBox -RichTextBox $RichTextBox
+  If ([String]::IsNullOrEmpty($ConfigFile))
+  {
+    # Sample Config
+    Write-RichTextBox -RichTextBox $RichTextBox -Text "Processing PIL Sample Configuration" -Font ([MyConfig]::Font.Bold) -TextFore ([MyConfig]::Colors.TextTitle)
+    $RichTextBox.SelectionIndent = 20
+    $RichTextBox.SelectionBullet = $True
+    Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Sample Configuration" -Value $ConfigName -Font ([MyConfig]::Font.Bold)
+    $RichTextBox.SelectionIndent = 30
+    
+    Try
+    {
+      $TmpConfig = $ConfigObject | ConvertFrom-Json
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Loading PIL Sample Configonfiguration" -ValueFore ([MyConfig]::Colors.TextFore)
+    }
+    Catch
+    {
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "ERROR" -TextFore ([MyConfig]::Colors.TextBad) -Value "Loading PIL Sample Configonfiguration" -ValueFore ([MyConfig]::Colors.TextFore)
+      $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
+      Write-RichTextBoxError -RichTextBox $RichTextBox
+      
+    }
+  }
+  Else
+  {
+    Write-RichTextBox -RichTextBox $RichTextBox -Text "Processing PIL Configuration File" -Font ([MyConfig]::Font.Bold) -TextFore ([MyConfig]::Colors.TextTitle)
+    $RichTextBox.SelectionIndent = 20
+    $RichTextBox.SelectionBullet = $True
+    
+    Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Configuration File" -Value ([System.IO.Path]::GetFileName($ConfigFile)) -Font ([MyConfig]::Font.Bold)
+    $RichTextBox.SelectionIndent = 30
+    
+    If ([System.IO.File]::Exists($ConfigFile))
+    {
+      Try
+      {
+        If ([System.IO.Path]::GetExtension($ConfigFile) -eq ".Json")
+        {
+          $TmpConfig = Get-Content -Path $ConfigFile -Raw | ConvertFrom-Json
+        }
+        Else
+        {
+          # Load Configuration
+          $TmpConfig = Import-Clixml -LiteralPath $ConfigFile
+        }
+        Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Loading PIL Config File" -ValueFore ([MyConfig]::Colors.TextFore)
+      }
+      Catch
+      {
+        Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "ERROR" -TextFore ([MyConfig]::Colors.TextBad) -Value "Loading PIL Config File Not Found" -ValueFore ([MyConfig]::Colors.TextFore)
+        $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
+        Write-RichTextBoxError -RichTextBox $RichTextBox
+      }
+    }
+    Else
+    {
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "WARNING" -TextFore ([MyConfig]::Colors.TextwARN) -Value "PIL Config File Not Found" -ValueFore ([MyConfig]::Colors.TextFore)
+      $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
+    }
+  }
+  
+  If ($DisplayResult -eq [System.Windows.Forms.DialogResult]::OK)
+  {
+    Try
+    {
+      # Add / Update PIL Columns
+      $RichTextBox.SelectionIndent = 20
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Number of Columns" -Value ($TmpConfig.ColumnNames.Count)
+      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = $Null
+      [MyRuntime]::UpdateTotalColumn($TmpConfig.ColumnNames.Count)
+      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
+      $RichTextBox.SelectionIndent = 30
+      $PILItemListListView.BeginUpdate()
+      $PILItemListListView.Columns.Clear()
+      $PILItemListListView.Items.Clear()
+      [MyRuntime]::ThreadConfig.ColumnNames = $TmpConfig.ColumnNames
+      For ($I = 0; $I -lt ([MyRuntime]::MaxColumns); $I++)
+      {
+        New-ColumnHeader -ListView $PILItemListListView -Text ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Name ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Tag ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Width -2
+      }
+      $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
+      New-ColumnHeader -ListView $PILItemListListView -Text " " -Name "Blank" -Tag " " -Width ($PILForm.Width * 4)
+      $PILItemListListView.EndUpdate()
+      
+      # Update Thread Script
+      $RichTextBox.SelectionIndent = 20
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Runspace Pool Threads" -Value ($TmpConfig.ThreadCount)
+      [MyRuntime]::ThreadConfig.UpdateThreadInfo($TmpConfig.ThreadCount, $TmpConfig.ThreadScript)
+      
+      # Add / Update Common Modules
+      $RichTextBox.SelectionIndent = 20
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Common Runspace Pool Modules" -Value ($TmpConfig.Modules.Count)
+      
+      # Install Modules Message
+      If ([MyConfig]::IsLocalAdmin)
+      {
+        $TmpInallMsg = "the System Module Folder"
+        $TmpScope = "AllUsers"
+      }
+      Else
+      {
+        $TmpInallMsg = "Your User Profile Module Folder"
+        $TmpScope = "CurrentUser"
+      }
+      
+      [MyRuntime]::ThreadConfig.Modules.Clear()
+      $FndModules = @($TmpConfig.Modules.PSObject.Properties | Select-Object -Property Name, Value)
+      :LoadMods ForEach ($Module In $FndModules)
+      {
+        $RichTextBox.SelectionIndent = 30
+        Write-RichTextBoxValue -RichTextBox $RichTextBox -Text $Module.Name -Value $Module.Value.Version
+        $RichTextBox.SelectionIndent = 40
+        
+        If ([MyRuntime]::Modules.ContainsKey($Module.Name))
+        {
+          If ([Version]::New([MyRuntime]::Modules[$Module.Name].Version) -lt [Version]::New($Module.Value.Version))
+          {
+            $DialogResult = Get-UserResponse -Title "Incorrect Module Version" -Message "The Module $($Module.Name) Version $($Module.Value.Version) was not Found would you like to Install it to $($TmpInallMsg)?" -ButtonLeft Yes -ButtonRight No -ButtonDefault Yes -Icon ([System.Drawing.SystemIcons]::Question)
+            If ($DialogResult.Success)
+            {
+              $ChkInstall = Install-MyModule -Name $Module.Name -Version $Module.Value.Version -Scope $TmpScope -Install -NoImport
+              If ($ChkInstall.Success)
+              {
+                Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation was Successful" -ValueFore ([MyConfig]::Colors.TextFore)
+              }
+              Else
+              {
+                Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "FAILED" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation Failed" -ValueFore ([MyConfig]::Colors.TextFore)
+                $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
+                Break LoadMods
+              }
+            }
+            Else
+            {
+              Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "FAILED" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation Failed" -ValueFore ([MyConfig]::Colors.TextFore)
+              $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
+              Break LoadMods
+            }
+          }
+        }
+        Else
+        {
+          $DialogResult = Get-UserResponse -Title "Module Not Instaled" -Message "The Module $($Module.Name) Version $($Module.Value.Version) was not Found would you like to Install it to $($TmpInallMsg)?" -ButtonLeft Yes -ButtonRight No -ButtonDefault Yes -Icon ([System.Drawing.SystemIcons]::Question)
+          If ($DialogResult.Success)
+          {
+            $ChkInstall = Install-MyModule -Name $Module.Name -Version $Module.Value.Version -Scope $TmpScope -Install -NoImport
+            If ($ChkInstall.Success)
+            {
+              Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation was Successful" -ValueFore ([MyConfig]::Colors.TextFore)
+            }
+            Else
+            {
+              Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "FAILED" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation Failed" -ValueFore ([MyConfig]::Colors.TextFore)
+              $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
+              Break LoadMods
+            }
+          }
+          Else
+          {
+            Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "FAILED" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation Failed" -ValueFore ([MyConfig]::Colors.TextFore)
+            $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
+            Break LoadMods
+          }
+        }
+        
+        # Add Module to List
+        [Void][MyRuntime]::ThreadConfig.Modules.Add($Module.Name, [PILModule]::New($Module.Value.Location, $Module.Value.Name, $Module.Value.Version))
+      }
+      
+      If ($DisplayResult -eq [System.Windows.Forms.DialogResult]::OK)
+      {
+        # Add / Update Common Functions
+        $RichTextBox.SelectionIndent = 20
+        $FndFunctions = @($TmpConfig.Functions.PSObject.Properties | Select-Object -Property Name, Value)
+        Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Common Runspace Pool Functions" -Value ($FndFunctions.Count)
+        [MyRuntime]::ThreadConfig.Functions.Clear()
+        $RichTextBox.SelectionIndent = 30
+        ForEach ($Function In $FndFunctions)
+        {
+          Write-RichTextBox -RichTextBox $RichTextBox -Text $Function.Name
+          [Void][MyRuntime]::ThreadConfig.Functions.Add($Function.Name, [PILFunction]::New($Function.Value.Name, $Function.Value.ScriptBlock))
+        }
+        
+        # Add / Update Common Variables
+        $RichTextBox.SelectionIndent = 20
+        $FndVariables = @($TmpConfig.Variables.PSObject.Properties | Select-Object -Property Name, Value)
+        Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Common Runspace Pool Variables" -Value ($FndVariables.Count)
+        [MyRuntime]::ThreadConfig.Variables.Clear()
+        $RichTextBox.SelectionIndent = 30
+        ForEach ($Variable In $FndVariables)
+        {
+          Write-RichTextBox -RichTextBox $RichTextBox -Text $Variable.Name
+          [Void][MyRuntime]::ThreadConfig.Variables.Add($Variable.Name, [PILVariable]::New($Variable.Value.Name, $Variable.Value.Value))
+        }
+      }
+    }
+    Catch
+    {
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "ERROR" -TextFore ([MyConfig]::Colors.TextBad) -Value "PIL Config File was not Loaded" -ValueFore ([MyConfig]::Colors.TextFore)
+      $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
+      Write-RichTextBoxError -RichTextBox $RichTextBox
+    }
+  }
+    
+  If ($ShowHeader)
+  {
+    $RichTextBox.SelectionIndent = 10
+    $RichTextBox.SelectionBullet = $False
+    Write-RichTextBox -RichTextBox $RichTextBox
+    
+    # Set Final Status Message
+    Switch ($DisplayResult)
+    {
+      "OK"
+      {
+        $FinalMsg = "Successfully Imported PIL Configuration"
+        $FinalClr = [MyConfig]::Colors.TextGood
+        Break
+      }
+      "Cancel"
+      {
+        $FinalMsg = "Errors Importing PIL Configuration"
+        $FinalClr = [MyConfig]::Colors.TextBad
+        Break
+      }
+    }
+    
+    # Write Final Status Message
+    Write-RichTextBox -RichTextBox $RichTextBox
+    Write-RichTextBox -RichTextBox $RichTextBox -Font ([MyConfig]::Font.Title) -Alignment "Center" -TextFore $FinalClr -Text $FinalMsg
+    Write-RichTextBox -RichTextBox $RichTextBox
+    Write-RichTextBox -RichTextBox $RichTextBox -Alignment "Center" -Text ($StopWatch.Elapsed.ToString())
+    Write-RichTextBox -RichTextBox $RichTextBox
+    
+    # Update Status Message
+    $PILBtmStatusStrip.Items["Status"].Text = $FinalMsg
+    $StopWatch.Stop()
+  }
+  
+  # Return DialogResult
+  $DisplayResult
+  $DisplayResult = $Null
+  
+  Write-Verbose -Message "Exit Function Load-PILConfigFIleJson"
+}
+#endregion function Load-PILConfigFIleJson
 
 
 #region function Load-PILDataExport
@@ -12246,6 +12488,189 @@ Function Load-PILDataExport()
 #endregion function Load-PILDataExport
 
 
+#region function Start-ProcessingItems
+Function Start-ProcessingItems()
+{
+  <#
+    .SYNOPSIS
+      Display Utility Status Sample Function
+    .DESCRIPTION
+      Display Utility Status Sample Function
+    .PARAMETER RichTextBox
+    .PARAMETER HashTable
+      Passed Paramters HashTable
+    .EXAMPLE
+      Start-ProcessingItems -RichTextBox $RichTextBox
+    .EXAMPLE
+      Start-ProcessingItems -RichTextBox $RichTextBox -HashTable $HashTable
+    .NOTES
+      Original Script By Ken Sweet
+    .LINK
+  #>
+  [CmdletBinding()]
+  Param (
+    [Parameter(Mandatory = $True)]
+    [System.Windows.Forms.RichTextBox]$RichTextBox,
+    [HashTable]$HashTable
+  )
+  Write-Verbose -Message "Enter Function Start-ProcessingItems"
+  
+  $DisplayResult = [System.Windows.Forms.DialogResult]::OK
+  $RichTextBox.Refresh()
+  
+  # Get Passed Values
+  $ShowHeader = $HashTable.ShowHeader
+  $ListItems = $HashTable.ListItems
+  
+  $RichTextBox.SelectionIndent = 10
+  $RichTextBox.SelectionBullet = $False
+  
+  If ($ShowHeader)
+  {
+    Write-RichTextBox -RichTextBox $RichTextBox
+    Write-RichTextBox -RichTextBox $RichTextBox -Font ([MyConfig]::Font.Title) -Alignment "Center" -Text "$($RichTextBox.Parent.Parent.Text)" -TextFore ([MyConfig]::Colors.TextTitle)
+    Write-RichTextBox -RichTextBox $RichTextBox
+    
+    # Update Status Message
+    $PILBtmStatusStrip.Items["Status"].Text = $RichTextBox.Parent.Parent.Text
+    
+    # Initialize StopWatch
+    $StopWatch = [System.Diagnostics.Stopwatch]::StartNew()
+  }
+  
+  Write-RichTextBox -RichTextBox $RichTextBox
+  Write-RichTextBox -RichTextBox $RichTextBox -Text "Starting Runspace Pool Jobs" -Font ([MyConfig]::Font.Bold) -TextFore ([MyConfig]::Colors.TextTitle)
+  $RichTextBox.SelectionIndent = 20
+  $RichTextBox.SelectionBullet = $True
+  
+  $PoolParams = @{
+    "Mutex" = [GUID]::NewGuid().Guid
+    "HashTable" = @{
+      "Pause"     = $False
+      "Terminate" = $False;
+      "Object"    = $Null
+    }
+    "MaxJobs" = [MyRuntime]::ThreadConfig.ThreadCount
+  }
+  
+  # Add Common Modules
+  $RichTextBox.SelectionIndent = 20
+  Write-RichTextBox -RichTextBox $RichTextBox -Text "Adding Common Runspace Pool Modules"
+  $RichTextBox.SelectionIndent = 30
+  If ([MyRuntime]::ThreadConfig.Modules.Count -gt 0)
+  {
+    $PoolParams.Add("Modules", @([MyRuntime]::ThreadConfig.Modules.Keys))
+  }
+  Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Found $([MyRuntime]::ThreadConfig.Modules.Count) Common Runspace Pool Modules" -ValueFore ([MyConfig]::Colors.TextFore)
+  
+  # Add Common Functions
+  $RichTextBox.SelectionIndent = 20
+  Write-RichTextBox -RichTextBox $RichTextBox -Text "Adding Common Runspace Pool Functions"
+  $RichTextBox.SelectionIndent = 30
+  If ([MyRuntime]::ThreadConfig.Functions.Count -gt 0)
+  {
+    $TmpFunctions = @{}
+    ForEach ($Function In [MyRuntime]::ThreadConfig.Functions.Values)
+    {
+      $TmpFunctions.Add($Function.Name, $Function.ScriptBlock)
+    }
+    $PoolParams.Add("Functions", $TmpFunctions)
+  }
+  Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Found $([MyRuntime]::ThreadConfig.Functions.Count) Common Runspace Pool Functions" -ValueFore ([MyConfig]::Colors.TextFore)
+  
+  # Add Status Icons
+  $RichTextBox.SelectionIndent = 20
+  Write-RichTextBox -RichTextBox $RichTextBox -Text "Adding ListViewItem Status Icons Variables"
+  $TmpVariables = @{
+    "GoodIcon"  = "StatusGood16Icon"
+    "BadIcon"   = "StatusBad16Icon"
+    "InfoIcon"  = "StatusInfo16Icon"
+    "CheckIcon" = "CheckIcon"
+    "ErrorIcon" = "UncheckIcon"
+    "UpIcon"    = "Up16Icon"
+    "DownIcon"  = "Down16Icon"
+  }
+    
+  # Add Common Variables
+  Write-RichTextBox -RichTextBox $RichTextBox -Text "Adding Custom Runspace Pool Variables"
+  $RichTextBox.SelectionIndent = 30
+  If ([MyRuntime]::ThreadConfig.Variables.Count -gt 0)
+  {
+    ForEach ($Variable In [MyRuntime]::ThreadConfig.Variables.Values)
+    {
+      $TmpVariables.Add($Variable.Name, $Variable.Value)
+    }
+  }
+  $PoolParams.Add("Variables", $TmpVariables)
+  Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Found $([MyRuntime]::ThreadConfig.Variables.Count) Runspace Pool Variables" -ValueFore ([MyConfig]::Colors.TextFore)
+  
+  # Starting Runspace Pool
+  $RichTextBox.SelectionIndent = 20
+  Write-RichTextBox -RichTextBox $RichTextBox -Text "Starting Runspace Pool"
+  $RichTextBox.SelectionIndent = 30
+  $ChkPool = Start-MyRSPool @PoolParams -PassThru
+    
+  If ($ChkPool.State -eq "Opened")
+  {
+    Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Runspace Pool ID: $($ChkPool.InstanceID)" -ValueFore ([MyConfig]::Colors.TextFore)
+    $RichTextBox.SelectionIndent = 20
+    Write-RichTextBox -RichTextBox $RichTextBox -Text "Starting $($ListItems.Count) Runspace Pool Jobs"
+    
+    ForEach ($ListItem In $ListItems)
+    {
+      $ListItem | Start-MyRSJob -InputParam "ListViewItem" -ScriptBlock ([ScriptBlock]::Create([MyRuntime]::ThreadConfig.ThreadScript))
+    }
+  }
+  Else
+  {
+    Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "ERROR" -TextFore ([MyConfig]::Colors.TextBad) -Value "Failed to Start Runspace Pool" -ValueFore ([MyConfig]::Colors.TextFore)
+    $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
+  }
+  
+  If ($ShowHeader)
+  {
+    $RichTextBox.SelectionIndent = 10
+    $RichTextBox.SelectionBullet = $False
+    Write-RichTextBox -RichTextBox $RichTextBox
+    
+    # Set Final Status Message
+    Switch ($DisplayResult)
+    {
+      "OK"
+      {
+        $FinalMsg = "Successfully Started Runspace Pool Jobs"
+        $FinalClr = [MyConfig]::Colors.TextGood
+        Break
+      }
+      "Cancel"
+      {
+        $FinalMsg = "Errors Starting Runspace Pool Jobs"
+        $FinalClr = [MyConfig]::Colors.TextBad
+        Break
+      }
+    }
+    
+    # Write Final Status Message
+    Write-RichTextBox -RichTextBox $RichTextBox
+    Write-RichTextBox -RichTextBox $RichTextBox -Font ([MyConfig]::Font.Title) -Alignment "Center" -TextFore $FinalClr -Text $FinalMsg
+    Write-RichTextBox -RichTextBox $RichTextBox
+    Write-RichTextBox -RichTextBox $RichTextBox -Alignment "Center" -Text ($StopWatch.Elapsed.ToString())
+    Write-RichTextBox -RichTextBox $RichTextBox
+    
+    # Update Status Message
+    $PILBtmStatusStrip.Items["Status"].Text = $FinalMsg
+    $StopWatch.Stop()
+  }
+  
+  # Return DialogResult
+  $DisplayResult
+  $DisplayResult = $Null
+  
+  Write-Verbose -Message "Exit Function Start-ProcessingItems"
+}
+#endregion function Start-ProcessingItems
+
+
 #region ThreadConfiguration Result Class
 Class ThreadConfiguration
 {
@@ -12288,7 +12713,7 @@ function Update-ThreadConfiguration ()
   #>
   [CmdletBinding()]
   param (
-    [String]$Title = "Update PIL Threads Configuration",
+    [String]$Title = "PIL Configuration - $([MyRuntime]::ConfigName)",
     [Int]$Width = 70,
     [Int]$Height = 33,
     [String]$ButtonLeft = "&OK",
@@ -12557,10 +12982,12 @@ function Update-ThreadConfiguration ()
       {
         $Sender.SelectedIndex = $TempIndex
         $PILTCFunctionsContextMenuStrip.Items["Remove"].Enabled = $True
+        $PILTCFunctionsContextMenuStrip.Items["Copy"].Enabled = $True
       }
       Else
       {
         $PILTCFunctionsContextMenuStrip.Items["Remove"].Enabled = $False
+        $PILTCFunctionsContextMenuStrip.Items["Copy"].Enabled = $False
       }
       $PILTCFunctionsContextMenuStrip.Items["Clear"].Enabled = ($Sender.Items.Count -gt 0)
       $PILTCFunctionsContextMenuStrip.Show($Sender, $EventArg.Location)
@@ -12700,12 +13127,12 @@ function Update-ThreadConfiguration ()
         {
           $TmpFunctions = Get-Content -Path $PILOpenFileDialog.FileName -Raw
           $AST = [System.Management.Automation.Language.Parser]::ParseInput($TmpFunctions, [ref]$Null, [ref]$Null)
-          $Functions = @($AST.FindAll({ Param ($Node) ($Node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and (-not ($node.Parent -is [System.Management.Automation.Language.FunctionMemberAst]))) }, $True))
+          $Functions = @($AST.FindAll({ Param ($Node) (($Node -is [System.Management.Automation.Language.FunctionDefinitionAst]) -and (-not ($node.Parent -is [System.Management.Automation.Language.FunctionMemberAst]))) }, $True))
           If ($Functions.Count -gt 0)
           {
             ForEach ($Function In $Functions)
             {
-              [Void]$PILTCFunctionsListBox.Items.Add([PILFunction]::New($Function.Name, $Function.Body.Extent.Text))
+              [Void]$PILTCFunctionsListBox.Items.Add([PILFunction]::New($Function.Name, $Function.Body.GetScriptBlock()))
             }
           }
         }
@@ -12714,6 +13141,15 @@ function Update-ThreadConfiguration ()
       "Remove"
       {
         $PILTCFunctionsListBox.Items.RemoveAt($PILTCFunctionsListBox.SelectedIndex)
+        Break
+      }
+      "Copy"
+      {
+        $StringBuilder = [System.Text.StringBuilder]::New("`r`n#region **** Function $($PILTCFunctionsListBox.SelectedItem.Name) ****`r`n")
+        [Void]$StringBuilder.AppendLine("function $($PILTCFunctionsListBox.SelectedItem.Name) ()")
+        [Void]$StringBuilder.AppendLine(($PILTCFunctionsListBox.SelectedItem.ScriptBlock.ToString()))
+        [Void]$StringBuilder.AppendLine("#endregion **** Function $($PILTCFunctionsListBox.SelectedItem.Name) ****`r`n")
+        [System.Windows.Forms.Clipboard]::SetText($StringBuilder.ToString())
         Break
       }
       "Clear"
@@ -12730,6 +13166,8 @@ function Update-ThreadConfiguration ()
   
   (New-MenuItem -Menu $PILTCFunctionsContextMenuStrip -Text "Add Functions" -Name "Add" -Tag "Add" -DisplayStyle "ImageAndText" -ImageKey "Add16Icon" -PassThru).add_Click({Start-PILTCFunctionsContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   (New-MenuItem -Menu $PILTCFunctionsContextMenuStrip -Text "Remove Function" -Name "Remove" -Tag "Remove" -DisplayStyle "ImageAndText" -ImageKey "Delete16Icon" -PassThru).add_Click({Start-PILTCFunctionsContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+  New-MenuSeparator -Menu $PILTCFunctionsContextMenuStrip
+  (New-MenuItem -Menu $PILTCFunctionsContextMenuStrip -Text "Copy Function" -Name "Copy" -Tag "Copy" -DisplayStyle "ImageAndText" -ImageKey "Copy16Icon" -PassThru).add_Click({Start-PILTCFunctionsContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   New-MenuSeparator -Menu $PILTCFunctionsContextMenuStrip
   (New-MenuItem -Menu $PILTCFunctionsContextMenuStrip -Text "Clear All" -Name "Clear" -Tag "Clear" -DisplayStyle "ImageAndText" -ImageKey "Clear16Icon" -PassThru).add_Click({ Start-PILTCFunctionsContextMenuStripItemClick -Sender $This -EventArg $PSItem})
 
@@ -13334,8 +13772,12 @@ function Update-ThreadConfiguration ()
 
     [MyConfig]::AutoExit = 0
     
-    $PILTCScriptContextMenuStrip.Items["Clear"].Enabled = ($PILTCScriptTextBox.Text.Length -gt 0)
-    $PILTCScriptContextMenuStrip.Show($Sender, $EventArg.Location)
+    If ($EventArg.Button -eq [System.Windows.Forms.MouseButtons]::Right)
+    {
+      $PILTCScriptContextMenuStrip.Items["Copy"].Enabled = ($PILTCScriptTextBox.Text.Length -gt 0)
+      $PILTCScriptContextMenuStrip.Items["Clear"].Enabled = ($PILTCScriptTextBox.Text.Length -gt 0)
+      $PILTCScriptContextMenuStrip.Show($Sender, $EventArg.Location)
+    }
     
     Write-Verbose -Message "Exit MouseDown Event for $($MyInvocation.MyCommand)"
   }
@@ -13437,7 +13879,19 @@ function Update-ThreadConfiguration ()
         If ($Response -eq [System.Windows.Forms.DialogResult]::OK)
         {
           $PILTCScriptTextBox.Text = Get-Content -Path $PILOpenFileDialog.FileName -Raw
+          $PILTCScriptTextBox.AppendText("`r`n`r`n")
+          $PILTCScriptTextBox.Focus()
+          $PILTCScriptTextBox.SelectionStart = 0
+          $PILTCScriptTextBox.SelectionLength = 0
+          $PILTCScriptTextBox.ScrollToCaret()
         }
+        Break
+      }
+      "Copy"
+      {
+        $PILTCScriptTextBox.SelectAll()
+        $PILTCScriptTextBox.Copy()
+        $PILTCScriptTextBox.DeselectAll()
         Break
       }
       "Clear"
@@ -13452,6 +13906,7 @@ function Update-ThreadConfiguration ()
   #endregion ******** Function Start-PILTCScriptContextMenuStripItemClick ********
 
   (New-MenuItem -Menu $PILTCScriptContextMenuStrip -Text "Load Script" -Name "Add" -Tag "Add" -DisplayStyle "ImageAndText" -ImageKey "Add16Icon" -PassThru).add_Click({Start-PILTCScriptContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+  (New-MenuItem -Menu $PILTCScriptContextMenuStrip -Text "Copy Script" -Name "Copy" -Tag "Copy" -DisplayStyle "ImageAndText" -ImageKey "Copy16Icon" -PassThru).add_Click({Start-PILTCScriptContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   (New-MenuItem -Menu $PILTCScriptContextMenuStrip -Text "Clear Script" -Name "Clear" -Tag "Clear" -DisplayStyle "ImageAndText" -ImageKey "Delete16Icon" -PassThru).add_Click({Start-PILTCScriptContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   
   $PILTCScriptGroupBox.ClientSize = [System.Drawing.Size]::New(($PILTCScriptGroupBox.ClientSize.Width), (([MyConfig]::Font.Height * 10) + [MyConfig]::FormSpacer))
@@ -13984,6 +14439,22 @@ AAAAAAAA+B+sQfgfrEH4H6xB+B+sQfgfrEEAAKxBAACsQQAArEEAAKxBAACsQQAArEH4H6xB+B+sQfgf
 #endregion ******** $Add16Icon ********
 $PILSmallImageList.Images.Add("Add16Icon", [System.Drawing.Icon]::New([System.IO.MemoryStream]::New([System.Convert]::FromBase64String($Add16Icon))))
 
+#region ******** $Copy16Icon ********
+$Copy16Icon = @"
+AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsbGx/4+Pj/+Hh4f/h4eH/4eHh/+Hh4f/h4eH/4eHh/+Hh4f/h4eH/4eH
+h/8AAAAAAAAAAAAAAAAAAAAAAAAAALa2tv////////////////////////////////////////////////+Hh4f/AAAAAAAAAACxsbH/j4+P/4eHh/+2trb///////v7+//7+/v/+/v7//v7+//7+/v/+/v7//z8
+/P//////h4eH/wAAAAAAAAAAtra2////////////tra2///////bzb//282//9vNv//bzb//282//9vNv//bzb///////4eHh/8AAAAAAAAAALa2tv//////+/v7/7a2tv///////f39//39/f/9/f3//f39//39
+/f/9/f3//f39//////+Hh4f/AAAAAAAAAAC2trb//////9vNv/+2trb//////9vNv//bzb//282//9vNv//bzb//282//9vNv///////h4eH/wAAAAAAAAAAtra2///////9/f3/tra2////////////////////
+/////////////////////////////4eHh/8AAAAAAAAAALa2tv//////282//7a2tv//////282//9vNv//bzb//282//9vNv//bzb//282///////+Hh4f/AAAAAAAAAAC2trb///////////+2trb/////////
+////////////////////////////////////////iIiI/wAAAAAAAAAAtra2///////bzb//tra2////////////////////////////yMjI/8jIyP/IyMj/yMjI/6ioqP8AAAAAAAAAALa2tv///////////7a2
+tv///////////////////////////7a2tv////////////r6+v+2trb/AAAAAAAAAAC2trb///////////+2trb///////////////////////////+2trb///////r6+v/ExMT/tra2nwAAAAAAAAAAtra2////
+////////tra2////////////////////////////tra2//r6+v/ExMT/tra2nwAAAAAAAAAAAAAAALa2tv///////////7a2tv/IyMj/yMjI/8jIyP/IyMj/yMjI/7a2tv+/v7//tra2nwAAAAAAAAAAAAAAAAAA
+AAC2trb///////////////////////////+2trb/+vr6/8TExP+2trafAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAtra2/8jIyP/IyMj/yMjI/8jIyP/IyMj/tra2/7+/v/+2trafAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAA8AGsQfABrEGAAaxBgAGsQYABrEGAAaxBgAGsQYABrEGAAaxBgAGsQYABrEGAAaxBgAOsQYAHrEGAH6xBgD+sQQ==
+"@
+#endregion ******** $Copy16Icon ********
+$PILSmallImageList.Images.Add("Copy16Icon", [System.Drawing.Icon]::New([System.IO.MemoryStream]::New([System.Convert]::FromBase64String($Copy16Icon))))
+
 #region ******** $import16Icon ********
 $import16Icon = @"
 AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACkpKQgoqKiWqGhoW+hoaF/oaGhhaGhoZOhoaGVoaGhlaGhoZWhoaGVoaGhk6GhoYWioqKAo6Ojd6Sk
@@ -14303,6 +14774,54 @@ OZAAAwAI8H+sQfAArEHwAKxB4ACsQeAArEHgAKxBwACsQcAArEGAAKxBgAGsQQABrEEAAaxBgACsQeAA
 "@
 #endregion ******** $Edit16Icon ********
 $PILSmallImageList.Images.Add("Edit16Icon", [System.Drawing.Icon]::New([System.IO.MemoryStream]::New([System.Convert]::FromBase64String($Edit16Icon))))
+
+#region ******** $Content16Icon ********
+$Content16Icon = @"
+AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANAAQCRwAvHJUDHxVJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAACsACwaIACkV3gBZMP0AeUf/Bm9KzQRfQ6QObVWkJ3topEOG
+eaRbjISka4+JoAAAAAAAAAAAAAAAAAAAAA0AGgvCADYV/gBMIf8AYjL/AHxK/wKbav8SuZD/NtO1/2Hk0f+J8OP/qvfv/5rLxcMAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAyEAHw5lAEIiqgBzROwFi13sDm1UjCR9
+aow9h3qMVI6GjGeSjYw8T0xGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgECARgQJwAAAAAAAAAAAAAAIQZdQqQGIxtCAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABkAGgrHACYRxwE1
+HMcBSirHAl46xwNuSdkCsoX/Lc2s/lGzodo4X1l3BwwLFwAAAAAAAAAAAAAAAAAAAAAAAAAIAB8KwQA8F/8AUCX/AGg3/wCBTf8AmWb/ArSH/yvQsf9t5tP+jc/F0lVzcG8AAAAAAAAAAAAAAAAAAAAAAAAAAAAF
+ARgBDwYzAhQKMwMaDzMDIBQzAkMrewNyVKART0JcDRoXGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAA//+sQf//rEH//6xB4f+sQQAHrEEAB6xBwAesQfmHrEHgAaxB4AGsQfAHrEH//6xB//+sQf//rEH//6xB//+sQQ==
+"@
+#endregion ******** $Content16Icon ********
+$PILSmallImageList.Images.Add("Content16Icon", [System.Drawing.Icon]::New([System.IO.MemoryStream]::New([System.Convert]::FromBase64String($Content16Icon))))
+
+#region ******** $Header16Icon ********
+$Header16Icon = @"
+AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANAAMGRwkgQpUJFypJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAACsBBxSIBRlJ3g03i/0VUKf/HlGNzRxJcqQrW3ukQW6DpFh+
+iqRriI6kd4yPoAAAAAAAAAAAAAAAAAAAAA0CDTTCAxpo/gcof/8NOpT/FlOq/yZ0wf9DmtX/a7/l/5DY7/+w6fb/yPP6/63IzMMAAAAAAAAAAAAAAAAAAAAAAAAAAAAEECEDEDRlCSdlqhRMnuwkZ6/sKVp+jEFw
+h4xWf46MaYmRjHePlIxDTU9GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQICBhEgJwAAAAAAAAAAAAAAIR1IcaQOHihCAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABkBDTXHBBVJxwgg
+XMcOMG7HFUB+xx1Qi9k5kNH/ZLbh/nKovNpFXGF3CAwMFwAAAAAAAAAAAAAAAAAAAAAAAAAIAQ1BwQMccP8IK4T/D0Ca/xlXrv8lcMD/OpLS/2a64/+Z2fD+pcnT0mBydG8AAAAAAAAAAAAAAAAAAAAAAAAAAAAC
+ChgCBxozBAwgMwYRJjMJFiozEDBYeyRbh6AmRldcERgcGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAA//+sQf//rEH//6xB4f+sQQAHrEEAB6xBwAesQfmHrEHgAaxB4AGsQfAHrEH//6xB//+sQf//rEH//6xB//+sQQ==
+"@
+#endregion ******** $Header16Icon ********
+$PILSmallImageList.Images.Add("Header16Icon", [System.Drawing.Icon]::New([System.IO.MemoryStream]::New([System.Convert]::FromBase64String($Header16Icon))))
+
+#region ******** $Demo16Icon ********
+$Demo16Icon = @"
+AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD///8B////Af///wH///8BAAAAAAAAAAAAAAALERERHhERER4AAAALAAAAAP8AAAH///8B////Af//
+/wH///8B////Af///wH///8BAAAAABYWFi0cHBqQHh0a0B4dGugdHRroHB4c0BgcGpAREREtAAAAAP///wH///8B////Af///wH///8BAAAAADY0NnAvLy7yIyIh/yAeHP8gHhv/Hx8c/x0gHf8dIR7/Ghwb8hYZ
+GXAAAAAA////Af///wH///8BAAAAAC0tLXZCQUH/PDs7/ygoJ/8gHh3/IR8c/x8gHf8eIR//HR8d/xweHf8dIB//GRwcdgAAAAD///8BAAAAABUVFTsmJSX6NjU1/0NCQv85ODj/Hh0c/yMiH/8hIx//GRwa/x0f
+Hv8eISD/HiIh/xsfHfoVFRU7AAAAAAAAAAAdHRyrIB8f/yMjIv80MzP/RURE/3Z1df+ioqH/paWk/2xtbP8iJSP/HyMh/x4gHv8dHx//GhwcqwAAAAATExMaHh0d6h8eHf8fHh7/Hh0d/359ff/Ly8v/5OTk/+np
+6f/Hx8f/eHp5/xsdHP8eHx//HB4e/xsdHeoTExMaGxsbOB0dHf0fHh3/Hh0d/zAvL/+xsbH/6Ojo/9LS0tjT09PY4uLi/7CwsP8uLy//HR0d/x0eHv8cHR39FhsWOBkZGT0eHh3/Hh4c/x0cG/83NjX/v7+///Dw
+8f+ioqKooqKiqPPz8//AwMD/Njc1/xwcG/8eHh3/Hh4d/xkZGT0aGhomHR0b9R4eHP8fHhz/IyMh/5ubmv/Q0ND/7Ozs/+vr6//V1db/paWj/zw7N/8qKif/JCQh/yAgHvUaGhomAAAABB4eG8weHhz/Hh8d/x0e
+HP9ERkP/qamp/9HR0f/Lysv/ra2t/3JwbP9ZVlH/SUdD/zs5Nv8tLSrMAAAABAAAAAAdHRpoHh8d/x8hH/8iJCH/HB0a/ystK/9SU1P/UlJU/zExMP9APjv/W1hU/1pYUv9SUEv/Ojo4aAAAAAAAAAAAMzMzBR0g
+HbwgIiD/Hh8d/x4fHv8dIB7/GRsb/xkZG/8eHR7/LCwq/0RDQP9ZV1L/VFJNvDMzAAUAAAAA////AQAAAAAWFhYXHB4bwx0eHf8dHx3/HSAf/x0fH/8dHh//Hh4e/yIiIf82NTL/R0ZCxE1CQhcAAAAA////Af//
+/wH///8BAAAAABwcHAkcHhx/Gx8c5R4hH/8dICD/HR8g/x8fH/8fHx7lKioofxwcHAkAAAAA////Af///wH///8B////Af///wH///8BAAAAABwcHBIgICBHHB4eaxweHmsgICBHHBwcEgAAAAAAAAAA////Af//
+/wH///8BDCCsQRAIrEEgBKxBQAKsQYABrEGAAaxBAACsQQAArEEAAKxBAACsQQAArEGAAaxBgAGsQUACrEEgBKxBCBisQQ==
+"@
+#endregion ******** $Demo16Icon ********
+$PILSmallImageList.Images.Add("Demo16Icon", [System.Drawing.Icon]::New([System.IO.MemoryStream]::New([System.Convert]::FromBase64String($Demo16Icon))))
 
 #endregion ******** PIL Small Image Icons ********
 
@@ -14857,7 +15376,7 @@ function Start-PILFormKeyDown
   Write-Verbose -Message "Enter KeyDown Event for $($MyInvocation.MyCommand)"
 
   [MyConfig]::AutoExit = 0
-
+  
   If ($EventArg.Control -and $EventArg.Alt)
   {
     Switch ($EventArg.KeyCode)
@@ -14886,6 +15405,20 @@ function Start-PILFormKeyDown
         $PILForm.Select()
         Break
       }
+      "Cancel"
+      {
+        Try
+        {
+          If (-not $PILTopMenuStrip.Items["ProcessItems"].Enabled)
+          {
+            Close-MyRSPool
+          }
+        }
+        Catch
+        {
+          
+        }
+      }
     }
   }
   Else
@@ -14903,7 +15436,7 @@ function Start-PILFormKeyDown
       }
     }
   }
-
+  
   Write-Verbose -Message "Exit KeyDown Event for $($MyInvocation.MyCommand)"
 }
 #endregion ******** Function Start-PILFormKeyDown ********
@@ -15367,21 +15900,31 @@ function Start-PILItemListListViewMouseDown
       {
         $TmpMenuText = "Selected"
       }
-      
-      $PILItemListContextMenuStrip.Items["Process"].Text = $PILItemListContextMenuStrip.Items["Process"].Tag -f $TmpMenuText
-      $PILItemListContextMenuStrip.Items["Export"].Text = $PILItemListContextMenuStrip.Items["Export"].Tag -f $TmpMenuText
-      $PILItemListContextMenuStrip.Items["Clear"].Text = $PILItemListContextMenuStrip.Items["Clear"].Tag -f $TmpMenuText
-      
-      $PILItemListContextMenuStrip.Show($Sender, $EventArg.Location)
     }
+    Else
+    {
+      $TmpMenuText = "None"
+    }
+    
+    $PILItemListContextMenuStrip.Items["Process"].Text = $PILItemListContextMenuStrip.Items["Process"].Tag -f $TmpMenuText
+    $PILItemListContextMenuStrip.Items["Process"].Enabled = ($TmpMenuText -ne "None")
+    $PILItemListContextMenuStrip.Items["Export"].Text = $PILItemListContextMenuStrip.Items["Export"].Tag -f $TmpMenuText
+    $PILItemListContextMenuStrip.Items["Export"].Enabled = ($TmpMenuText -ne "None")
+    $PILItemListContextMenuStrip.Items["Clear"].Text = $PILItemListContextMenuStrip.Items["Clear"].Tag -f $TmpMenuText
+    $PILItemListContextMenuStrip.Items["Clear"].Enabled = ($TmpMenuText -ne "None")
+    
+    $PILItemListContextMenuStrip.Items["Check"].Enabled = ($TmpMenuText -ne "None")
+    $PILItemListContextMenuStrip.Items["Uncheck"].Enabled = ($TmpMenuText -ne "None")
+    
+    $PILItemListContextMenuStrip.Show($Sender, $EventArg.Location)
   }
-
+  
   Write-Verbose -Message "Exit MouseDown Event for $($MyInvocation.MyCommand)"
 }
 #endregion ******** Function Start-PILItemListListViewMouseDown ********
 $PILItemListListView.add_MouseDown({Start-PILItemListListViewMouseDown -Sender $This -EventArg $PSItem})
 
-For ($I = 0; $I -lt $MaxColumns; $I++)
+For ($I = 0; $I -lt [MyRuntime]::StartColumns; $I++)
 {
   New-ColumnHeader -ListView $PILItemListListView -Text ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Name ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Tag ([MyRuntime]::ThreadConfig.ColumnNames[$I])
 }
@@ -15486,20 +16029,54 @@ Function Start-PILItemListContextMenuStripItemClick
   {
     "Process"
     {
-      # Set Status Message
-      $PILBtmStatusStrip.Items["Status"].Text = "Process $($TmpListText) Items"
-      $PILBtmStatusStrip.Refresh()
+      #region Start List Processing
       
-      # *****************************************
-      # **** Testing - Exit to Nested Prompt ****
-      # *****************************************
-      Write-Host -Object "Line Num: $((Get-PSCallStack).ScriptLineNumber)"
-      #$Host.EnterNestedPrompt()
-      # *****************************************
-      # **** Testing - Exit to Nested Prompt ****
-      # *****************************************
-      
+      If ([String]::IsNullOrEmpty([MyRuntime]::ThreadConfig.ThreadScript))
+      {
+        $DialogResult = Get-UserResponse -Title "No PIL Configureation" -Message "There is no PIL Script Configured!" -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Warning)
+      }
+      else
+      {
+        # Set Status Message
+        $PILBtmStatusStrip.Items["Status"].Text = "Start Processing $($TmpListText) Item List"
+        $PILBtmStatusStrip.Refresh()
+        
+        # Disable Main Menu Iteme
+        $PILTopMenuStrip.Items["AddItems"].Enabled = $False
+        $PILTopMenuStrip.Items["Configure"].Enabled = $False
+        $PILTopMenuStrip.Items["ProcessItems"].Enabled = $False
+        $PILTopMenuStrip.Items["ListData"].Enabled = $False
+        
+        # Disable Right Click Menu
+        $PILItemListContextMenuStrip.Enabled = $False
+        
+        # Disable ListView Sort
+        $PILItemListListView.ListViewItemSorter.Enable = $False
+        
+        # Build RunSpace Pool
+        $HashTable = @{
+          "ShowHeader" = $True; "ListItems" = $TmpLisTViewItems
+        }
+        $ScriptBlock = {
+          [CmdletBinding()]
+          Param ([System.Windows.Forms.RichTextBox]$RichTextBox,
+            [HashTable]$HashTable) Start-ProcessingItems -RichTextBox $RichTextBox -HashTable $HashTable
+        }
+        $DialogResult = Show-RichTextStatus -ScriptBlock $ScriptBlock -Title "Initializing $([MyConfig]::ScriptName)" -ButtonMid "OK" -HashTable $HashTable -AutoClose -AutoCloseWait 1
+        
+        # Set Processing ToolStrip
+        $PILItelListToolStrip.Items["Process"].Checked = $True
+        $PILItelListToolStrip.Items["Pause"].Checked = $False
+        $PILItelListToolStrip.Items["Stop"].Checked = $False
+        $PILItelListToolStrip.BringToFront()
+        
+        $PILBtmStatusStrip.Items["Status"].Text = "Processing $($TmpListText.Count) List Items"
+        $PILBtmStatusStrip.Refresh()
+        
+        Monitor-RunspacePoolThreads
+      }
       Break
+      #endregion Start List Processing
     }
     "Export"
     {
@@ -15536,6 +16113,45 @@ Function Start-PILItemListContextMenuStripItemClick
       Break
       #endregion Export Slected / Checked Items
     }
+    "Header"
+    {
+      $PILItemListListView.BeginUpdate()
+      $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
+      If ($PILItemListListView.Items.Count -gt 0)
+      {
+        $PILItemListListView.Columns[0].Width = -1
+      }
+      $PILItemListListView.Columns[([MyRuntime]::MaxColumns)].Width = ($PILForm.Width * 4)
+      $PILItemListListView.EndUpdate()
+      Break
+    }
+    "Content"
+    {
+      $PILItemListListView.BeginUpdate()
+      If ($PILItemListListView.Items.Count -eq 0)
+      {
+        $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
+      }
+      Else
+      {
+        $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::ColumnContent)
+      }
+      $PILItemListListView.Columns[([MyRuntime]::MaxColumns)].Width = ($PILForm.Width * 4)
+      $PILItemListListView.EndUpdate()
+      Break
+    }
+    "Check"
+    {
+      $TmpChecked = @($PILItemListListView.Items | Where-Object -FilterScript { -not $PSItem.Checked })
+      $TmpChecked | ForEach-Object -Process { $PSItem.Checked = $True }
+      Break
+    }
+    "UnCheck"
+    {
+      $TmpChecked = @($PILItemListListView.Items | Where-Object -FilterScript { $PSItem.Checked })
+      $TmpChecked | ForEach-Object -Process { $PSItem.Checked = $False }
+      Break
+    }
     "Clear"
     {
       #region Clear Selected / Checked Item List
@@ -15544,22 +16160,62 @@ Function Start-PILItemListContextMenuStripItemClick
       $PILBtmStatusStrip.Items["Status"].Text = "Clear $($TmpListText) Items"
       $PILBtmStatusStrip.Refresh()
       
-      $DialogResult = Get-UserResponse -Title "Clear Item List?" -Message "Do you want to Clear the $($TmpListText) Items?" -ButtonLeft Yes -ButtonRight No -ButtonDefault Yes -Icon ([System.Drawing.SystemIcons]::Question)
+      $DialogResult = Get-UserResponse -Title "Clear Item List?" -Message "Do you want to Clear the $($TmpListText) Items?" -ButtonLeft Yes -ButtonRight No -ButtonDefault No -Icon ([System.Drawing.SystemIcons]::Question)
       If ($DialogResult.Success)
-      {
-        # Clear Item List
-        $TmpLisTViewItems | ForEach-Object { $PILItemListListView.Items.Remove($PSItem) }
-        
-        # Set Status Message
-        $PILBtmStatusStrip.Items["Status"].Text = "Successfully Cleared $($TmpListText) Items"
-      }
-      Else
       {
         # Set Status Message
         $PILBtmStatusStrip.Items["Status"].Text = "Canceled Clearing $($TmpListText) Items"
       }
+      Else
+      {
+        # Clear Item List
+        $TmpLisTViewItems | ForEach-Object {
+          $PILItemListListView.Items.Remove($PSItem)
+        }
+        
+        # Set Status Message
+        $PILBtmStatusStrip.Items["Status"].Text = "Successfully Cleared $($TmpListText) Items"
+      }
       Break
       #endregion Clear Selected / Checked Item List
+    }
+    "Reset"
+    {
+      #region Reset PIL
+      
+      # Set Status Message
+      $PILBtmStatusStrip.Items["Status"].Text = "Reseting $([MyConfig]::ScriptName)"
+      $PILBtmStatusStrip.Refresh()
+      
+      $DialogResult = Get-UserResponse -Title "Reset All?" -Message "Do you want to Reset $([MyConfig]::ScriptName) to Default Settings??" -ButtonLeft Yes -ButtonRight No -ButtonDefault No -Icon ([System.Drawing.SystemIcons]::Question)
+      If ($DialogResult.Success)
+      {
+        # Set Status Message
+        $PILBtmStatusStrip.Items["Status"].Text = "Canceled Reseting $([MyConfig]::ScriptName)"
+      }
+      Else
+      {
+        $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = $Null
+        [MyRuntime]::UpdateTotalColumn([MyRuntime]::StartColumns)
+        $PILItemListListView.BeginUpdate()
+        $PILItemListListView.Columns.Clear()
+        $PILItemListListView.Items.Clear()
+        For ($I = 0; $I -lt ([MyRuntime]::StartColumns); $I++)
+        {
+          New-ColumnHeader -ListView $PILItemListListView -Text ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Name ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Tag ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Width -2
+        }
+        $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
+        New-ColumnHeader -ListView $PILItemListListView -Text " " -Name "Blank" -Tag " " -Width ($PILForm.Width * 4)
+        $PILItemListListView.EndUpdate()
+        
+        [MyRuntime]::ConfigName = "Unknown Configuration"
+        $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
+        
+        # Set Status Message
+        $PILBtmStatusStrip.Items["Status"].Text = "Successfully Reset $([MyConfig]::ScriptName)"
+      }
+      Break
+      #endregion Reset PIL
     }
   }
   
@@ -15569,7 +16225,16 @@ Function Start-PILItemListContextMenuStripItemClick
 
 (New-MenuItem -Menu $PILItemListContextMenuStrip -Text "Process" -Name "Process" -Tag "Process {0} Items" -DisplayStyle "ImageAndText" -ImageKey "Process16Icon" -PassThru).add_Click({Start-PILItemListContextMenuStripItemClick -Sender $This -EventArg $PSItem})
 (New-MenuItem -Menu $PILItemListContextMenuStrip -Text "Export" -Name "Export" -Tag "Export {0} Items" -DisplayStyle "ImageAndText" -ImageKey "Export16Icon" -PassThru).add_Click({Start-PILItemListContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+New-MenuSeparator -Menu $PILItemListContextMenuStrip
+(New-MenuItem -Menu $PILItemListContextMenuStrip -Text "Check All" -Name "Check" -Tag "Check" -DisplayStyle "ImageAndText" -ImageKey "CheckIcon" -PassThru).add_Click({Start-PILItemListContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $PILItemListContextMenuStrip -Text "Uncheck All" -Name "Uncheck" -Tag "Uncheck" -DisplayStyle "ImageAndText" -ImageKey "UnCheckIcon" -PassThru).add_Click({Start-PILItemListContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+New-MenuSeparator -Menu $PILItemListContextMenuStrip
+(New-MenuItem -Menu $PILItemListContextMenuStrip -Text "Resize Header" -Name "Header" -Tag "Header" -DisplayStyle "ImageAndText" -ImageKey "Header16Icon" -PassThru).add_Click({Start-PILItemListContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $PILItemListContextMenuStrip -Text "Resize Content" -Name "Content" -Tag "Content" -DisplayStyle "ImageAndText" -ImageKey "Content16Icon" -PassThru).add_Click({Start-PILItemListContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+New-MenuSeparator -Menu $PILItemListContextMenuStrip
 (New-MenuItem -Menu $PILItemListContextMenuStrip -Text "Clear" -Name "Clear" -Tag "Clear {0} Items" -DisplayStyle "ImageAndText" -ImageKey "Clear16Icon" -PassThru).add_Click({Start-PILItemListContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+New-MenuSeparator -Menu $PILItemListContextMenuStrip
+(New-MenuItem -Menu $PILItemListContextMenuStrip -Text "Reset" -Name "Reset" -Tag "Reset" -DisplayStyle "ImageAndText" -ImageKey "PILFormIcon" -PassThru).add_Click({Start-PILItemListContextMenuStripItemClick -Sender $This -EventArg $PSItem})
 
 # ************************************************
 # PILItelList ToolStrip
@@ -15636,84 +16301,48 @@ function Start-PILItelListToolStripItemClick
       "Process"
       {
         # Set Status Message
-        $PILBtmStatusStrip.Items["Status"].Text = "Clicked $($Sender.Name)"
+        $PILBtmStatusStrip.Items["Status"].Text = "Resume Processing List Items"
         $PILBtmStatusStrip.Refresh()
         
         # Set Processing ToolStrip Menu Items
         $PILItelListToolStrip.Items["Pause"].Checked = $False
         $PILItelListToolStrip.Items["Stop"].Checked = $False
         
-        # *****************************************
-        # **** Testing - Exit to Nested Prompt ****
-        # *****************************************
-        Write-Host -Object "Line Num: $((Get-PSCallStack).ScriptLineNumber)"
-        #$Host.EnterNestedPrompt()
-        # *****************************************
-        # **** Testing - Exit to Nested Prompt ****
-        # *****************************************
+        # Uppause Runspace Pool Threads
+        (Get-MyRSPool).SyncedHash["Pause"] = $Fasle
         
         # Set Status Message
-        $PILBtmStatusStrip.Items["Status"].Text = "Processing Item List"
+        $PILBtmStatusStrip.Items["Status"].Text = "Processing Item List has Resumed"
         Break
       }
       "Pause"
       {
         # Set Status Message
-        $PILBtmStatusStrip.Items["Status"].Text = "Clicked $($Sender.Name)"
+        $PILBtmStatusStrip.Items["Status"].Text = "Pause Processing List Items"
         $PILBtmStatusStrip.Refresh()
         
         # Set Pauseing ToolStrip Menu Items
         $PILItelListToolStrip.Items["Process"].Checked = $False
         $PILItelListToolStrip.Items["Stop"].Checked = $False
         
-        # *****************************************
-        # **** Testing - Exit to Nested Prompt ****
-        # *****************************************
-        Write-Host -Object "Line Num: $((Get-PSCallStack).ScriptLineNumber)"
-        #$Host.EnterNestedPrompt()
-        # *****************************************
-        # **** Testing - Exit to Nested Prompt ****
-        # *****************************************
+        # Pause Runspace Pol Threads
+        (Get-MyRSPool).SyncedHash["Pause"] = $True
         
         # Set Status Message
-        $PILBtmStatusStrip.Items["Status"].Text = "Pause Processing Item List"
+        $PILBtmStatusStrip.Items["Status"].Text = "Processing Item List has been Paused"
         Break
       }
       "Stop"
       {
         # Set Status Message
-        $PILBtmStatusStrip.Items["Status"].Text = "Clicked $($Sender.Name)"
+        $PILBtmStatusStrip.Items["Status"].Text = "Terminate Proccessing List Items"
         $PILBtmStatusStrip.Refresh()
         
-        # Set Stopping ToolStrip Menu Items
-        $PILItelListToolStrip.Items["Process"].Checked = $False
-        $PILItelListToolStrip.Items["Pause"].Checked = $False
-        $PILItelListToolStrip.Items["Stop"].Checked = $False
-        $PILItelListToolStrip.SendToBack()
-        
-        # Re-Enable Main Menu Items
-        $PILTopMenuStrip.Items["AddItems"].Enabled = $True
-        $PILTopMenuStrip.Items["Configure"].Enabled = $True
-        $PILTopMenuStrip.Items["ProcessItems"].Enabled = $True
-        $PILTopMenuStrip.Items["ListData"].Enabled = $True
-        
-        # Re-Enable Right Click Menu
-        $PILItemListContextMenuStrip.Enabled = $True
-        
-        # Enable ListView Sort
-        $PILItemListListView.ListViewItemSorter.Enable = $True
-        
-        # *****************************************
-        # **** Testing - Exit to Nested Prompt ****
-        # *****************************************
-        Write-Host -Object "Line Num: $((Get-PSCallStack).ScriptLineNumber)"
-        #$Host.EnterNestedPrompt()
-        # *****************************************
-        # **** Testing - Exit to Nested Prompt ****
-        # *****************************************
+        # Terminate Threads
+        (Get-MyRSPool).SyncedHash["Terminate"] = $True
         
         # Set Status Message
-        $PILBtmStatusStrip.Items["Status"].Text = "Stop Processing Item List"
+        $PILBtmStatusStrip.Items["Status"].Text = "Proccessing List Items has been Terminated"
         Break
       }
     }
@@ -15954,9 +16583,8 @@ function Start-PILTopMenuStripItemClick
     "TotalColumns"
     {
       #region Set Total Columns
-      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - 2].ImageKey = $Null
+      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = $Null
       [MyRuntime]::UpdateTotalColumn($Sender.Tag)
-      $TmpColumns = [MyRuntime]::ThreadConfig.GetColumnNames()
       $PILItemListListView.BeginUpdate()
       $PILItemListListView.Columns.Clear()
       For ($I = 0; $I -lt ([MyRuntime]::MaxColumns); $I++)
@@ -15966,7 +16594,9 @@ function Start-PILTopMenuStripItemClick
       $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
       New-ColumnHeader -ListView $PILItemListListView -Text " " -Name "Blank" -Tag " " -Width ($PILForm.Width * 4)
       $PILItemListListView.EndUpdate()
-      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - 2].ImageKey = "Selected16Icon"
+      
+      [MyRuntime]::ConfigName = "Unknown Configuration"
+      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
       #endregion Set Total Columns
     }
     "ColumnNames"
@@ -16004,6 +16634,36 @@ function Start-PILTopMenuStripItemClick
       $DialogResult = Update-ThreadConfiguration
       If ($DialogResult.Success)
       {
+        $Response = Get-UserResponse -Title "Save Configuration" -Message "Would you like to Save the PIL Configuration?" -ButtonLeft Yes -ButtonRight No -ButtonDefault Yes -Icon ([System.Drawing.SystemIcons]::Question)
+        If ($Response.Success)
+        {
+          # Save Export File
+          $PILSaveFileDialog.FileName = ""
+          $PILSaveFileDialog.Filter = "PIL Config Files|*.Xml;*.Json"
+          $PILSaveFileDialog.FilterIndex = 1
+          $PILSaveFileDialog.Title = "Save PIL Configuration File"
+          $PILSaveFileDialog.Tag = $Null
+          $Response = $PILSaveFileDialog.ShowDialog()
+          If ($Response -eq [System.Windows.Forms.DialogResult]::OK)
+          {
+            If ([System.IO.Path]::GetExtension($PILSaveFileDialog.FileName) -eq ".Json")
+            {
+              # Save Config
+              [MyRuntime]::ThreadConfig | ConvertTo-Json -Compress | Out-File -FilePath $PILSaveFileDialog.FileName -Encoding ASCII
+            }
+            Else
+            {
+              # Save Config
+              [MyRuntime]::ThreadConfig | Export-Clixml -Path $PILSaveFileDialog.FileName -Encoding ASCII
+            }
+            
+            # Update PIL Config Name
+            [MyRuntime]::ConfigName = [System.IO.Path]::GetFileName($PILSaveFileDialog.FileName)
+            
+            # Save Current Directory
+            $PILSaveFileDialog.InitialDirectory = [System.IO.Path]::GetDirectoryName($PILSaveFileDialog.FileName)
+          }
+        }
         $PILBtmStatusStrip.Items["Status"].Text = "Successfully Updated PIL Threads Configuration"
       }
       Else
@@ -16023,7 +16683,7 @@ function Start-PILTopMenuStripItemClick
       
       # Open Selected File
       $PILOpenFileDialog.FileName = ""
-      $PILOpenFileDialog.Filter = "PIL Config File|*.PILConfig|All Files (*.*)|*.*"
+      $PILOpenFileDialog.Filter = "PIL Config Files|*.Xml;*.Json"
       $PILOpenFileDialog.FilterIndex = 1
       $PILOpenFileDialog.Multiselect = $False
       $PILOpenFileDialog.Title = "Load PIL Configuration File"
@@ -16032,19 +16692,29 @@ function Start-PILTopMenuStripItemClick
       If ($Response -eq [System.Windows.Forms.DialogResult]::OK)
       {
         $HashTable = @{"ShowHeader" = $True; "ConfigFile" = $PILOpenFileDialog.FileName }
-        $ScriptBlock = { [CmdletBinding()] param ([System.Windows.Forms.RichTextBox]$RichTextBox, [HashTable]$HashTable) Load-PILConfigFIle -RichTextBox $RichTextBox -HashTable $HashTable }
+        if ([System.IO.Path]::GetExtension($PILOpenFileDialog.FileName) -eq ".Json")
+        {
+          $ScriptBlock = { [CmdletBinding()] param ([System.Windows.Forms.RichTextBox]$RichTextBox, [HashTable]$HashTable) Load-PILConfigFIleJson -RichTextBox $RichTextBox -HashTable $HashTable }
+        }
+        else
+        {
+          $ScriptBlock = { [CmdletBinding()] param ([System.Windows.Forms.RichTextBox]$RichTextBox, [HashTable]$HashTable) Load-PILConfigFIleXml -RichTextBox $RichTextBox -HashTable $HashTable }
+        }
         $DialogResult = Show-RichTextStatus -ScriptBlock $ScriptBlock -Title ($PILBtmStatusStrip.Items["Status"].Text) -ButtonMid "OK" -HashTable $HashTable
+        
         If ($DialogResult.Success)
         {
+          # Update PIL Config Name
+          [MyRuntime]::ConfigName = [System.IO.Path]::GetFileName($PILOpenFileDialog.FileName)
+          
+          # Save Current Directory
+          $PILOpenFileDialog.InitialDirectory = [System.IO.Path]::GetDirectoryName($PILOpenFileDialog.FileName)
           $PILBtmStatusStrip.Items["Status"].Text = "Success Loading PIL Configuration File"
         }
         Else
         {
           $PILBtmStatusStrip.Items["Status"].Text = "Errors Loading PIL Configuration File"
         }
-        
-        # Save Current Directory
-        $PILOpenFileDialog.InitialDirectory = [System.IO.Path]::GetDirectoryName($PILOpenFileDialog.FileName)
       }
       Else
       {
@@ -16062,16 +16732,27 @@ function Start-PILTopMenuStripItemClick
       $PILBtmStatusStrip.Refresh()
       
       # Save Export File
-      $PILSaveFileDialog.FileName = ""
-      $PILSaveFileDialog.Filter = "PIL Config File|*.PILConfig|All Files (*.*)|*.*"
+      $PILSaveFileDialog.FileName = [MyRuntime]::ConfigName
+      $PILSaveFileDialog.Filter = "PIL Config Files|*.Xml;*.Json"
       $PILSaveFileDialog.FilterIndex = 1
       $PILSaveFileDialog.Title = "Save PIL Configuration File"
       $PILSaveFileDialog.Tag = $Null
       $Response = $PILSaveFileDialog.ShowDialog()
       If ($Response -eq [System.Windows.Forms.DialogResult]::OK)
       {
-        # Save Config
-        [MyRuntime]::ThreadConfig | Export-Clixml -Path $PILSaveFileDialog.FileName -Encoding ASCII
+        if ([System.IO.Path]::GetExtension($PILSaveFileDialog.FileName) -eq ".Json")
+        {
+          # Save Config
+          [MyRuntime]::ThreadConfig | ConvertTo-Json -Compress | Out-File -FilePath $PILSaveFileDialog.FileName -Encoding ASCII
+        }
+        Else
+        {
+          # Save Config
+          [MyRuntime]::ThreadConfig | Export-Clixml -Path $PILSaveFileDialog.FileName -Encoding ASCII
+        }
+        
+        # Update PIL Config Name
+        [MyRuntime]::ConfigName = [System.IO.Path]::GetFileName($PILSaveFileDialog.FileName)
         
         # Save Current Directory
         $PILSaveFileDialog.InitialDirectory = [System.IO.Path]::GetDirectoryName($PILSaveFileDialog.FileName)
@@ -16086,28 +16767,61 @@ function Start-PILTopMenuStripItemClick
     }
     "ProcessItems"
     {
+      #region Start List Processing
+      
       # Set Status Message
-      $PILBtmStatusStrip.Items["Status"].Text = "Processing Item List"
+      $PILBtmStatusStrip.Items["Status"].Text = "Start Processing All List Items"
       $PILBtmStatusStrip.Refresh()
       
-      # Disable Main Menu Iteme
-      $PILTopMenuStrip.Items["AddItems"].Enabled = $False
-      $PILTopMenuStrip.Items["Configure"].Enabled = $False
-      $PILTopMenuStrip.Items["ProcessItems"].Enabled = $False
-      $PILTopMenuStrip.Items["ListData"].Enabled = $False
-      
-      # Disable Right Click Menu
-      $PILItemListContextMenuStrip.Enabled = $False
-      
-      # Disable ListView Sort
-      $PILItemListListView.ListViewItemSorter.Enable = $False
-      
-      # Set Processing ToolStrip
-      $PILItelListToolStrip.Items["Process"].Checked = $True
-      $PILItelListToolStrip.Items["Pause"].Checked = $False
-      $PILItelListToolStrip.Items["Stop"].Checked = $False
-      $PILItelListToolStrip.BringToFront()
+      If ($PILItemListListView.Items.Count -eq 0)
+      {
+        $DialogResult = Get-UserResponse -Title "No List Items" -Message "There are no List Items to Proccess!" -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Warning)
+      }
+      Else
+      {
+        If ([String]::IsNullOrEmpty([MyRuntime]::ThreadConfig.ThreadScript))
+        {
+          $DialogResult = Get-UserResponse -Title "No PIL Configureation" -Message "There is no PIL Script Configured!" -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Warning)
+        }
+        Else
+        {
+          # Disable Main Menu Iteme
+          $PILTopMenuStrip.Items["AddItems"].Enabled = $False
+          $PILTopMenuStrip.Items["Configure"].Enabled = $False
+          $PILTopMenuStrip.Items["ProcessItems"].Enabled = $False
+          $PILTopMenuStrip.Items["ListData"].Enabled = $False
+          
+          # Disable Right Click Menu
+          $PILItemListContextMenuStrip.Enabled = $False
+          
+          # Disable ListView Sort
+          $PILItemListListView.ListViewItemSorter.Enable = $False
+          
+          # Build RunSpace Pool
+          $HashTable = @{
+            "ShowHeader" = $True; "ListItems" = @($PILItemListListView.Items)
+          }
+          $ScriptBlock = {
+            [CmdletBinding()]
+            Param ([System.Windows.Forms.RichTextBox]$RichTextBox,
+              [HashTable]$HashTable) Start-ProcessingItems -RichTextBox $RichTextBox -HashTable $HashTable
+          }
+          $DialogResult = Show-RichTextStatus -ScriptBlock $ScriptBlock -Title "Initializing $([MyConfig]::ScriptName)" -ButtonMid "OK" -HashTable $HashTable -AutoClose -AutoCloseWait 1
+          
+          # Set Processing ToolStrip
+          $PILItelListToolStrip.Items["Process"].Checked = $True
+          $PILItelListToolStrip.Items["Pause"].Checked = $False
+          $PILItelListToolStrip.Items["Stop"].Checked = $False
+          $PILItelListToolStrip.BringToFront()
+          
+          $PILBtmStatusStrip.Items["Status"].Text = "Processing $($PILItemListListView.Items.Count) List Items"
+          $PILBtmStatusStrip.Refresh()
+          
+          Monitor-RunspacePoolThreads
+        }
+      }
       Break
+      #endregion Start List Processing
     }
     "ExportCSV"
     {
@@ -16183,6 +16897,60 @@ function Start-PILTopMenuStripItemClick
       Break
       #endregion Clear Item List
     }
+    "Sample"
+    {
+      #region Load Sample Configuration
+      $PILBtmStatusStrip.Items["Status"].Text = "Loading Sample PIL Configuration"
+      $PILBtmStatusStrip.Refresh()
+      
+      Switch ($Sender.Tag)
+      {
+        "SampleDemo"
+        {
+          $ConfigObject = $SampleDemo
+          $ConfigName = "Sample - Demo"
+          Break
+        }
+        "StarterConfig"
+        {
+          $ConfigObject = $StarterConfig
+          $ConfigName = "Starter Config"
+          Break
+        }
+        "GetWorkstationInfo"
+        {
+          $ConfigObject = $GetWorkstationInfo
+          $ConfigName = "Get-WorkstationInfo"
+          Break
+        }
+        "GetDomainComps"
+        {
+          $ConfigObject = $GetDomainInfo
+          $ConfigName = "Get-DomainComputers"
+          Break
+        }
+        "GetDomainUsers"
+        {
+          $ConfigObject = $GetDomainInfo
+          $ConfigName = "Get-DomainUsers"
+          Break
+        }
+      }
+      $HashTable = @{"ShowHeader" = $True; "ConfigObject" = $ConfigObject; "ConfigName" = $ConfigName}
+      $ScriptBlock = { [CmdletBinding()] param ([System.Windows.Forms.RichTextBox]$RichTextBox, [HashTable]$HashTable) Load-PILConfigFIleJson -RichTextBox $RichTextBox -HashTable $HashTable }
+      $DialogResult = Show-RichTextStatus -ScriptBlock $ScriptBlock -Title ($PILBtmStatusStrip.Items["Status"].Text) -ButtonMid "OK" -HashTable $HashTable
+      If ($DialogResult.Success)
+      {
+        [MyRuntime]::ConfigName = $ConfigName
+        $PILBtmStatusStrip.Items["Status"].Text = "Success Loading Sample PIL Configuration"
+      }
+      Else
+      {
+        $PILBtmStatusStrip.Items["Status"].Text = "Errors Loading Sample PIL Configuration"
+      }
+      Break
+      #endregion Load Sample Configuration
+    }
     "Help"
     {
       #region Show Help
@@ -16235,17 +17003,28 @@ New-MenuSeparator -Menu $DropDownMenu
 
 $DropDownMenu = New-MenuItem -Menu $PILTopMenuStrip -Text "Configure $([char]0x00BB)" -Name "Configure" -Tag "Configure" -DisplayStyle "ImageAndText" -ImageKey "Config16Icon" -TextImageRelation "ImageBeforeText" -PassThru
 $SubDropDownMenu = New-MenuItem -Menu $DropDownMenu -Text "Number of Columns" -Name "TotalColumns" -Tag "TotalColumns" -DisplayStyle "ImageAndText" -ImageKey "Calc16Icon" -TextImageRelation "ImageBeforeText" -PassThru
-For ($I = 2; $I -le [MyRuntime]::MaxColumns; $I++)
+For ($I = [MyRuntime]::MinColumns; $I -le [MyRuntime]::MaxColumns; $I++)
 {
   (New-MenuItem -Menu $SubDropDownMenu -Text ("{0:00} Total Columns" -f $I) -ToolTip "Set the Number of Item List Columns" -Name "TotalColumns" -Tag $I -DisplayStyle "ImageAndText" -TextImageRelation "ImageBeforeText" -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 }
-$SubDropDownMenu.DropDownItems[$SubDropDownMenu.DropDownItems.Count - 1].ImageKey = "Selected16Icon"
+$SubDropDownMenu.DropDownItems[[MyRuntime]::StartColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
 (New-MenuItem -Menu $DropDownMenu -Text "Set Column Names" -Name "ColumnNames" -Tag "ColumnNames" -DisplayStyle "ImageAndText" -ImageKey "Column16Icon" -TextImageRelation "ImageBeforeText" -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 
-(New-MenuItem -Menu $DropDownMenu -Text "Config Thread Script" -Name "ThreadScript" -Tag "ThreadScript" -DisplayStyle "ImageAndText" -ImageKey "Threads16Icon" -TextImageRelation "ImageBeforeText" -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $DropDownMenu -Text "Edit Configuration" -Name "ThreadScript" -Tag "ThreadScript" -DisplayStyle "ImageAndText" -ImageKey "Threads16Icon" -TextImageRelation "ImageBeforeText" -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 New-MenuSeparator -Menu $DropDownMenu
 (New-MenuItem -Menu $DropDownMenu -Text "Load Configuration" -Name "LoadConfig" -Tag "LoadConfig" -DisplayStyle "ImageAndText" -ImageKey "LoadConfig16Icon" -TextImageRelation "ImageBeforeText" -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 (New-MenuItem -Menu $DropDownMenu -Text "Save Configuration" -Name "SaveConfig" -Tag "SaveConfig" -DisplayStyle "ImageAndText" -ImageKey "SaveConfig16Icon" -TextImageRelation "ImageBeforeText" -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+New-MenuSeparator -Menu $DropDownMenu
+
+$SubDropDownMenu = New-MenuItem -Menu $DropDownMenu -Text "Sample PIL Configs" -Name "Examples" -Tag "Examples" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru
+(New-MenuItem -Menu $SubDropDownMenu -Text "Runspace Pool Demo" -Name "Sample" -Tag "SampleDemo" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $SubDropDownMenu -Text "Starter Configuration" -Name "Sample" -Tag "StarterConfig" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $SubDropDownMenu -Text "Get Workstation Info" -Name "Sample" -Tag "GetWorkstationInfo" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $SubDropDownMenu -Text "Get Domain Computers" -Name "Sample" -Tag "GetDomainComps" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $SubDropDownMenu -Text "Get Domain Users" -Name "Sample" -Tag "GetDomainUsers" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+
+
+
 New-MenuSeparator -Menu $PILTopMenuStrip
 
 (New-MenuItem -Menu $PILTopMenuStrip -Text "Process Items" -Name "ProcessItems" -Tag "ProcessItems" -DisplayStyle "ImageAndText" -ImageKey "Process16Icon" -TextImageRelation "ImageBeforeText" -ClickOnCheck -Check -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
