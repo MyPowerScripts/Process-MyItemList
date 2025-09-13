@@ -52,11 +52,11 @@ If ($ListViewItem.SubItems[$StatusCol].Text -eq "Completed")
 # ----------------------------------------------------
 # Check if Threads are Paused and Update Thread Status
 # ----------------------------------------------------
-If ($SyncedHash.Paused)
+If ($SyncedHash.Pause)
 {
   # Set Paused Status
   $ListViewItem.SubItems[1].Text = "Pause"
-  While ($SyncedHash.Paused)
+  While ($SyncedHash.Pause)
   {
     [System.Threading.Thread]::Sleep(100)
   }

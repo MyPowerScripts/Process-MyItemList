@@ -9,10 +9,8 @@ function Get-MyADForest ()
       Retrieves the Active Directory Forest object either for the current forest or for a specified forest name.
     .PARAMETER Name
       The name of the Active Directory forest to retrieve. This parameter is mandatory when using the "Name" parameter set.
-    .PARAMETER Current
-      Switch parameter. If specified, retrieves the current Active Directory forest. This parameter is mandatory when using the "Current" parameter set.
     .EXAMPLE
-      PS C:\> Get-MyADForest -Current
+      PS C:\> Get-MyADForest
       Retrieves the current Active Directory forest.
     .EXAMPLE
       PS C:\> Get-MyADForest -Name "contoso.com"
@@ -23,9 +21,7 @@ function Get-MyADForest ()
   [CmdletBinding(DefaultParameterSetName = "Current")]
   param (
     [parameter(Mandatory = $True, ParameterSetName = "Name")]
-    [String]$Name,
-    [parameter(Mandatory = $True, ParameterSetName = "Current")]
-    [Switch]$Current
+    [String]$Name
   )
   Write-Verbose -Message "Enter Function $($MyInvocation.MyCommand)"
 
@@ -50,6 +46,66 @@ function Get-MyADForest ()
   Write-Verbose -Message "Exit Function $($MyInvocation.MyCommand)"
 }
 #endregion function Get-MyADForest
+
+#region function Get-MyADDomain
+function Get-MyADDomain ()
+{
+  <#
+    .SYNOPSIS
+      Gets information about an Active Directory Domain.
+    .DESCRIPTION
+      Retrieves the Active Directory Domain object either for the current domain, a specified domain name, or the domain associated with the local computer.
+    .PARAMETER Name
+      The name of the Active Directory domain to retrieve. This parameter is mandatory when using the "Name" parameter set.
+    .PARAMETER Computer
+      Switch parameter. If specified, retrieves the Active Directory domain associated with the local computer. This parameter is mandatory when using the "Computer" parameter set.
+    .EXAMPLE
+      PS C:\> Get-MyADDomain
+      Retrieves the current Active Directory domain.
+    .EXAMPLE
+      PS C:\> Get-MyADDomain -Computer
+      Retrieves the Active Directory domain associated with the local computer.
+    .EXAMPLE
+      PS C:\> Get-MyADDomain -Name "contoso.com"
+      Retrieves the Active Directory domain with the name "contoso.com".
+    .NOTES
+      Original Function By Ken Sweet
+  #>
+  [CmdletBinding(DefaultParameterSetName = "Current")]
+  param (
+    [parameter(Mandatory = $True, ParameterSetName = "Name")]
+    [String]$Name,
+    [parameter(Mandatory = $True, ParameterSetName = "Computer")]
+    [Switch]$Computer
+  )
+  Write-Verbose -Message "Enter Function $($MyInvocation.MyCommand)"
+
+  switch ($PSCmdlet.ParameterSetName)
+  {
+    "Name"
+    {
+      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Domain
+      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)
+      [System.DirectoryServices.ActiveDirectory.Domian]::GetDomain($DirectoryContext)
+      $DirectoryContext = $Null
+      $DirectoryContextType = $Null
+      break
+    }
+    "Computer"
+    {
+      [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain()
+      break
+    }
+    "Current"
+    {
+      [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
+      break
+    }
+  }
+
+  Write-Verbose -Message "Exit Function $($MyInvocation.MyCommand)"
+}
+#endregion function Get-MyADDomain
 
 #region function Get-MyADObject
 function Get-MyADObject()

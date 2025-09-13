@@ -453,8 +453,10 @@ Class MyRuntime
   Static [Uint16]$MinColumns = 5
   Static [Uint16]$MaxColumns = 24
   Static [UInt16]$StartColumns = $StartColumns
+  Static [UInt16]$CurrentColumns = $StartColumns
+  
   # Thread Configuration
-  Static [PILThreadConfig]$ThreadConfig = [PILThreadConfig]::New([MyRuntime]::StartColumns)
+  Static [PILThreadConfig]$ThreadConfig = [PILThreadConfig]::New([MyRuntime]::CurrentColumns)
   
   # Path to Module Install Locatiosn
   Static [String]$AUModules = "$($ENV:ProgramFiles)\WindowsPowerShell\Modules"
@@ -468,8 +470,20 @@ Class MyRuntime
   
   Static [Void] UpdateTotalColumn ([Uint16]$MaxColumns)
   {
-    [MyRuntime]::MaxColumns = $MaxColumns
+    [MyRuntime]::CurrentColumns = $MaxColumns
     [MyRuntime]::ThreadConfig = [PILThreadConfig]::New($MaxColumns)
+  }
+  
+  Static [Void] AddPILColumn ([String]$AddName)
+  {
+    [MyRuntime]::CurrentColumns += 1
+    [MyRuntime]::ThreadConfig.ColumnNames += $AddName
+  }
+  
+  Static [Void] RemovePILComun ([String]$RemoveName)
+  {
+    [MyRuntime]::CurrentColumns -= 1
+    [MyRuntime]::ThreadConfig.ColumnNames = @([MyRuntime]::ThreadConfig.ColumnNames | Where-Object -FilterScript { $PSItem -ne $RemoveName })
   }
   
   Static [String]$ConfigName = "Unknown Configuration"
@@ -491,7 +505,7 @@ $GetWorkstationInfo = @'
   },
   "Variables": {},
   "ThreadCount": 4,
-  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n\r\n#region class MyWorkstationInfo\r\nClass MyWorkstationInfo\r\n{\r\n  [String]$ComputerName = [Environment]::MachineName\r\n  [String]$FQDN = [Environment]::MachineName\r\n  [Bool]$Found = $False\r\n  [String]$UserName = \"\"\r\n  [String]$Domain = \"\"\r\n  [Bool]$DomainMember = $False\r\n  [int]$ProductType = 0\r\n  [String]$Manufacturer = \"\"\r\n  [String]$Model = \"\"\r\n  [Bool]$IsMobile = $False\r\n  [String]$SerialNumber = \"\"\r\n  [Long]$Memory = 0\r\n  [String]$OperatingSystem = \"\"\r\n  [String]$BuildNumber = \"\"\r\n  [String]$Version = \"\"\r\n  [String]$ServicePack = \"\"\r\n  [String]$Architecture = \"\"\r\n  [Bool]$Is64Bit = $False\r\n  [DateTime]$LocalDateTime = [DateTime]::MinValue\r\n  [DateTime]$InstallDate = [DateTime]::MinValue\r\n  [DateTime]$LastBootUpTime = [DateTime]::MinValue\r\n  [String]$IPAddress = \"\"\r\n  [String]$Status = \"Off-Line\"\r\n  [DateTime]$StartTime = [DateTime]::Now\r\n  [DateTime]$EndTime = [DateTime]::Now\r\n  \r\n  MyWorkstationInfo ([String]$ComputerName)\r\n  {\r\n    $This.ComputerName = $ComputerName.ToUpper()\r\n    $This.FQDN = $ComputerName.ToUpper()\r\n    $This.Status = \"On-Line\"\r\n  }\r\n  \r\n  [Void] AddComputerSystem ([String]$TestName, [String]$IPAddress, [String]$ComputerName, [Bool]$DomainMember, [String]$Domain, [String]$Manufacturer, [String]$Model, [String]$UserName, [Long]$Memory)\r\n  {\r\n    $This.IPAddress = $IPAddress\r\n    $This.ComputerName = \"$($ComputerName)\".ToUpper()\r\n    $This.DomainMember = $DomainMember\r\n    $This.Domain = \"$($Domain)\".ToUpper()\r\n    If ($DomainMember)\r\n    {\r\n      $This.FQDN = \"$($ComputerName).$($Domain)\".ToUpper()\r\n    }\r\n    $This.Manufacturer = $Manufacturer\r\n    $This.Model = $Model\r\n    $This.UserName = $UserName\r\n    $This.Memory = $Memory\r\n    $This.Found = ($ComputerName -eq @($TestName.Split(\".\"))[0])\r\n  }\r\n  \r\n  [Void] AddOperatingSystem ([int]$ProductType, [String]$OperatingSystem, [String]$ServicePack, [String]$BuildNumber, [String]$Version, [String]$Architecture, [DateTime]$LocalDateTime, [DateTime]$InstallDate, [DateTime]$LastBootUpTime)\r\n  {\r\n    $This.ProductType = $ProductType\r\n    $This.OperatingSystem = $OperatingSystem\r\n    $This.ServicePack = $ServicePack\r\n    $This.BuildNumber = $BuildNumber\r\n    $This.Version = $Version\r\n    $This.Architecture = $Architecture\r\n    $This.Is64Bit = ($Architecture -eq \"64-bit\")\r\n    $This.LocalDateTime = $LocalDateTime\r\n    $This.InstallDate = $InstallDate\r\n    $This.LastBootUpTime = $LastBootUpTime\r\n  }\r\n  \r\n  [Void] AddSerialNumber ([String]$SerialNumber)\r\n  {\r\n    $This.SerialNumber = $SerialNumber\r\n  }\r\n  \r\n  [Void] AddIsMobile ([Long[]]$ChassisTypes)\r\n  {\r\n    $This.IsMobile = (@(8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32) -contains $ChassisTypes[0])\r\n  }\r\n  \r\n  [Void] UpdateStatus ([String]$Status)\r\n  {\r\n    $This.Status = $Status\r\n  }\r\n  \r\n  [MyWorkstationInfo] SetEndTime ()\r\n  {\r\n    $This.EndTime = [DateTime]::Now\r\n    Return $This\r\n  }\r\n  \r\n  [TimeSpan] GetRunTime ()\r\n  {\r\n    Return ($This.EndTime - $This.StartTime)\r\n  }\r\n}\r\n#endregion class MyWorkstationInfo\r\n\r\n# Common Columns\r\n$StatusCol = 17\r\n$DateTimeCol = 18\r\n$ErrorCol = 19\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n#\r\n# One Column needs to be the Status the the Thread\r\n#  Status Messages are Customizable\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$StatusCol].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Pasue if Needed\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Paused)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Pause\"\r\n  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"g\")\r\n  While ($SyncedHash.Paused)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Termination if Needed\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Return\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"g\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# --------------------------------------------------\r\n# Get Curent List Item\r\n# --------------------------------------------------\r\n$ComputerName = $ListViewItem.SubItems[0].Text\r\n\r\n# Set Proccessing Ststus\r\n$ListViewItem.SubItems[$StatusCol].Text = \"Processing\"\r\n$ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"g\")\r\n\r\nTry\r\n{\r\n  $WorkstationInfo = Get-MyWorkstationInfo -ComputerName $ComputerName -Serial -Mobile\r\n  $WasSuccess = $WorkstationInfo.Found\r\n  \r\n  $ListViewItem.SubItems[01].Text = $WorkstationInfo.Status\r\n  $ListViewItem.SubItems[02].Text = $WorkstationInfo.IPAddress\r\n  $ListViewItem.SubItems[03].Text = $WorkstationInfo.FQDN\r\n  $ListViewItem.SubItems[04].Text = $WorkstationInfo.Domain\r\n  $ListViewItem.SubItems[05].Text = $WorkstationInfo.ComputerName\r\n  $ListViewItem.SubItems[06].Text = $WorkstationInfo.UserName\r\n  $ListViewItem.SubItems[07].Text = $WorkstationInfo.OperatingSystem\r\n  $ListViewItem.SubItems[08].Text = $WorkstationInfo.BuildNumber\r\n  $ListViewItem.SubItems[09].Text = $WorkstationInfo.Architecture\r\n  $ListViewItem.SubItems[10].Text = $WorkstationInfo.SerialNumber\r\n  $ListViewItem.SubItems[11].Text = $WorkstationInfo.Manufacturer\r\n  $ListViewItem.SubItems[12].Text = $WorkstationInfo.Model\r\n  $ListViewItem.SubItems[13].Text = $WorkstationInfo.IsMobile\r\n  $ListViewItem.SubItems[14].Text = $WorkstationInfo.Memory\r\n  $ListViewItem.SubItems[15].Text = $WorkstationInfo.InstallDate\r\n  $ListViewItem.SubItems[16].Text = $WorkstationInfo.LastBootUpTime\r\n  \r\n}\r\nCatch [System.Management.Automation.RuntimeException]\r\n{\r\n  $WasSuccess = $False\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.Message\r\n}\r\nCatch [System.Management.Automation.ErrorRecord]\r\n{\r\n  $WasSuccess = $False\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.Exception.Message\r\n}\r\nCatch\r\n{\r\n  $WasSuccess = $False\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.ToString()\r\n}\r\n\r\n\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Error\"\r\n}\r\n\r\nWrite-Host -Object $ListViewItem.ImageKey\r\n\r\nExit\r\n\r\n\r\n",
+  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n\r\n#region class MyWorkstationInfo\r\nClass MyWorkstationInfo\r\n{\r\n  [String]$ComputerName = [Environment]::MachineName\r\n  [String]$FQDN = [Environment]::MachineName\r\n  [Bool]$Found = $False\r\n  [String]$UserName = \"\"\r\n  [String]$Domain = \"\"\r\n  [Bool]$DomainMember = $False\r\n  [int]$ProductType = 0\r\n  [String]$Manufacturer = \"\"\r\n  [String]$Model = \"\"\r\n  [Bool]$IsMobile = $False\r\n  [String]$SerialNumber = \"\"\r\n  [Long]$Memory = 0\r\n  [String]$OperatingSystem = \"\"\r\n  [String]$BuildNumber = \"\"\r\n  [String]$Version = \"\"\r\n  [String]$ServicePack = \"\"\r\n  [String]$Architecture = \"\"\r\n  [Bool]$Is64Bit = $False\r\n  [DateTime]$LocalDateTime = [DateTime]::MinValue\r\n  [DateTime]$InstallDate = [DateTime]::MinValue\r\n  [DateTime]$LastBootUpTime = [DateTime]::MinValue\r\n  [String]$IPAddress = \"\"\r\n  [String]$Status = \"Off-Line\"\r\n  [DateTime]$StartTime = [DateTime]::Now\r\n  [DateTime]$EndTime = [DateTime]::Now\r\n  \r\n  MyWorkstationInfo ([String]$ComputerName)\r\n  {\r\n    $This.ComputerName = $ComputerName.ToUpper()\r\n    $This.FQDN = $ComputerName.ToUpper()\r\n    $This.Status = \"On-Line\"\r\n  }\r\n  \r\n  [Void] AddComputerSystem ([String]$TestName, [String]$IPAddress, [String]$ComputerName, [Bool]$DomainMember, [String]$Domain, [String]$Manufacturer, [String]$Model, [String]$UserName, [Long]$Memory)\r\n  {\r\n    $This.IPAddress = $IPAddress\r\n    $This.ComputerName = \"$($ComputerName)\".ToUpper()\r\n    $This.DomainMember = $DomainMember\r\n    $This.Domain = \"$($Domain)\".ToUpper()\r\n    If ($DomainMember)\r\n    {\r\n      $This.FQDN = \"$($ComputerName).$($Domain)\".ToUpper()\r\n    }\r\n    $This.Manufacturer = $Manufacturer\r\n    $This.Model = $Model\r\n    $This.UserName = $UserName\r\n    $This.Memory = $Memory\r\n    $This.Found = ($ComputerName -eq @($TestName.Split(\".\"))[0])\r\n  }\r\n  \r\n  [Void] AddOperatingSystem ([int]$ProductType, [String]$OperatingSystem, [String]$ServicePack, [String]$BuildNumber, [String]$Version, [String]$Architecture, [DateTime]$LocalDateTime, [DateTime]$InstallDate, [DateTime]$LastBootUpTime)\r\n  {\r\n    $This.ProductType = $ProductType\r\n    $This.OperatingSystem = $OperatingSystem\r\n    $This.ServicePack = $ServicePack\r\n    $This.BuildNumber = $BuildNumber\r\n    $This.Version = $Version\r\n    $This.Architecture = $Architecture\r\n    $This.Is64Bit = ($Architecture -eq \"64-bit\")\r\n    $This.LocalDateTime = $LocalDateTime\r\n    $This.InstallDate = $InstallDate\r\n    $This.LastBootUpTime = $LastBootUpTime\r\n  }\r\n  \r\n  [Void] AddSerialNumber ([String]$SerialNumber)\r\n  {\r\n    $This.SerialNumber = $SerialNumber\r\n  }\r\n  \r\n  [Void] AddIsMobile ([Long[]]$ChassisTypes)\r\n  {\r\n    $This.IsMobile = (@(8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32) -contains $ChassisTypes[0])\r\n  }\r\n  \r\n  [Void] UpdateStatus ([String]$Status)\r\n  {\r\n    $This.Status = $Status\r\n  }\r\n  \r\n  [MyWorkstationInfo] SetEndTime ()\r\n  {\r\n    $This.EndTime = [DateTime]::Now\r\n    Return $This\r\n  }\r\n  \r\n  [TimeSpan] GetRunTime ()\r\n  {\r\n    Return ($This.EndTime - $This.StartTime)\r\n  }\r\n}\r\n#endregion class MyWorkstationInfo\r\n\r\n# Common Columns\r\n$StatusCol = 17\r\n$DateTimeCol = 18\r\n$ErrorCol = 19\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n#\r\n# One Column needs to be the Status the the Thread\r\n#  Status Messages are Customizable\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$StatusCol].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Pasue if Needed\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Pause)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Pause\"\r\n  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"g\")\r\n  While ($SyncedHash.Pause)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Termination if Needed\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Return\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"g\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# --------------------------------------------------\r\n# Get Curent List Item\r\n# --------------------------------------------------\r\n$ComputerName = $ListViewItem.SubItems[0].Text\r\n\r\n# Set Proccessing Ststus\r\n$ListViewItem.SubItems[$StatusCol].Text = \"Processing\"\r\n$ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"g\")\r\n\r\nTry\r\n{\r\n  $WorkstationInfo = Get-MyWorkstationInfo -ComputerName $ComputerName -Serial -Mobile\r\n  $WasSuccess = $WorkstationInfo.Found\r\n  \r\n  $ListViewItem.SubItems[01].Text = $WorkstationInfo.Status\r\n  $ListViewItem.SubItems[02].Text = $WorkstationInfo.IPAddress\r\n  $ListViewItem.SubItems[03].Text = $WorkstationInfo.FQDN\r\n  $ListViewItem.SubItems[04].Text = $WorkstationInfo.Domain\r\n  $ListViewItem.SubItems[05].Text = $WorkstationInfo.ComputerName\r\n  $ListViewItem.SubItems[06].Text = $WorkstationInfo.UserName\r\n  $ListViewItem.SubItems[07].Text = $WorkstationInfo.OperatingSystem\r\n  $ListViewItem.SubItems[08].Text = $WorkstationInfo.BuildNumber\r\n  $ListViewItem.SubItems[09].Text = $WorkstationInfo.Architecture\r\n  $ListViewItem.SubItems[10].Text = $WorkstationInfo.SerialNumber\r\n  $ListViewItem.SubItems[11].Text = $WorkstationInfo.Manufacturer\r\n  $ListViewItem.SubItems[12].Text = $WorkstationInfo.Model\r\n  $ListViewItem.SubItems[13].Text = $WorkstationInfo.IsMobile\r\n  $ListViewItem.SubItems[14].Text = $WorkstationInfo.Memory\r\n  $ListViewItem.SubItems[15].Text = $WorkstationInfo.InstallDate\r\n  $ListViewItem.SubItems[16].Text = $WorkstationInfo.LastBootUpTime\r\n  \r\n}\r\nCatch [System.Management.Automation.RuntimeException]\r\n{\r\n  $WasSuccess = $False\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.Message\r\n}\r\nCatch [System.Management.Automation.ErrorRecord]\r\n{\r\n  $WasSuccess = $False\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.Exception.Message\r\n}\r\nCatch\r\n{\r\n  $WasSuccess = $False\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.ToString()\r\n}\r\n\r\n\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Error\"\r\n}\r\n\r\nWrite-Host -Object $ListViewItem.ImageKey\r\n\r\nExit\r\n\r\n\r\n",
   "ColumnNames": [
     "Workstation",
     "On-Line",
@@ -525,7 +539,7 @@ $SampleDemo = @'
   "Functions": {},
   "Variables": {},
   "ThreadCount": 4,
-  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding(DefaultParameterSetName = \"ByValue\")]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n#\r\n# One Column needs to be the Status the the Thread\r\n#  Status Messages are Customizable\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[1].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Pasue if Needed\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Paused)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[1].Text = \"Pause\"\r\n  While ($SyncedHash.Paused)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Termination if Needed\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Return\r\n  $ListViewItem.SubItems[1].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[2].Text = [DateTime]::Now.ToString(\"g\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Set Proccessing Ststus\r\n$ListViewItem.SubItems[1].Text = \"Processing\"\r\n$ListViewItem.SubItems[2].Text = [DateTime]::Now.ToString(\"g\")\r\n$WasSuccess = $True\r\n\r\n# --------------------------------------------------\r\n# Get Curent List Item\r\n#\r\n# Coulmn 0 Always has the List Item to be Proccessed\r\n# --------------------------------------------------\r\n$CurentItem = $ListViewItem.SubItems[0].Text\r\n\r\n# --------------------------------------------------------------\r\n# Open and wait for Mutex\r\n# \r\n# This is to Pause the Thread Script if Access a Shared Resource\r\n#   and you need toi Limit to 1 Thread at a Time\r\n#\r\n# Using a Mutext is Optional\r\n# --------------------------------------------------------------\r\n$MyMutex = [System.Threading.Mutex]::OpenExisting($Mutex)\r\n[Void]($MyMutex.WaitOne())\r\n\r\n# Set Date / Time when Mutext was Opened\r\n$ListViewItem.SubItems[3].Text = [DateTime]::Now.ToString(\"g\")\r\n\r\n# --------------------------------------------------------------------------------\r\n# The Synced HashTable has an Object Property to share information between Threads\r\n# --------------------------------------------------------------------------------\r\nIf ([String]::IsNullOrEmpty($SyncedHash.Object))\r\n{\r\n  $SyncedHash.Object = \"First\"\r\n}\r\n$ListViewItem.SubItems[4].Text = $SyncedHash.Object\r\n$SyncedHash.Object = $CurentItem\r\n\r\n# Release Mutex\r\n$MyMutex.ReleaseMutex()\r\n\r\n# Random Number Generator\r\n$Random = [System.Random]::New()\r\n\r\n# ---------------------------------------------------------\r\n# Gernate a Fake Error\r\n#\r\n# Make sure to use Error Catching to make sure thread exits\r\n# ---------------------------------------------------------\r\nTry\r\n{\r\n  Switch ($Random.Next(0, 3))\r\n  {\r\n    \"0\"\r\n    {\r\n      Throw \"This is a Fake Error!\"\r\n      Break\r\n    }\r\n    \"1\"\r\n    {\r\n      Throw \"Simulated Error!\"\r\n      Break\r\n    }\r\n    \"2\"\r\n    {\r\n      Throw \"Someing Failed!\"\r\n      Break\r\n    }\r\n    \"3\"\r\n    {\r\n      Throw \"Unknown Error!\"\r\n      Break\r\n    }\r\n  }\r\n}\r\nCatch\r\n{\r\n  # Save Error Mesage\r\n  $ListViewItem.SubItems[5].Text = $Error[0].Exception.Message\r\n}\r\n\r\n\r\nFor ($I = 8; $I -lt 16; $I++)\r\n{\r\n  $ListViewItem.SubItems[$I].Text = [DateTime]::Now.ToString(\"HH:mm:ss:ffff\")\r\n  [System.Threading.Thread]::Sleep(100)\r\n}\r\n\r\n$RndValue = $Random.Next(0, 3)\r\n$ListViewItem.SubItems[6].Text = $RndValue\r\n# Random Fail Simlater\r\nIf ($RndValue -eq 0)\r\n{\r\n  $WasSuccess = $False\r\n}\r\n$ListViewItem.SubItems[7].Text = $WasSuccess\r\n\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[1].Text = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[1].Text = \"Error\"\r\n}\r\n\r\nExit\r\n\r\n\r\n",
+  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding(DefaultParameterSetName = \"ByValue\")]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n#\r\n# One Column needs to be the Status the the Thread\r\n#  Status Messages are Customizable\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[1].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Pasue if Needed\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Pause)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[1].Text = \"Pause\"\r\n  While ($SyncedHash.Pause)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Termination if Needed\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Return\r\n  $ListViewItem.SubItems[1].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[2].Text = [DateTime]::Now.ToString(\"g\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Set Proccessing Ststus\r\n$ListViewItem.SubItems[1].Text = \"Processing\"\r\n$ListViewItem.SubItems[2].Text = [DateTime]::Now.ToString(\"g\")\r\n$WasSuccess = $True\r\n\r\n# --------------------------------------------------\r\n# Get Curent List Item\r\n#\r\n# Coulmn 0 Always has the List Item to be Proccessed\r\n# --------------------------------------------------\r\n$CurentItem = $ListViewItem.SubItems[0].Text\r\n\r\n# --------------------------------------------------------------\r\n# Open and wait for Mutex\r\n# \r\n# This is to Pause the Thread Script if Access a Shared Resource\r\n#   and you need toi Limit to 1 Thread at a Time\r\n#\r\n# Using a Mutext is Optional\r\n# --------------------------------------------------------------\r\n$MyMutex = [System.Threading.Mutex]::OpenExisting($Mutex)\r\n[Void]($MyMutex.WaitOne())\r\n\r\n# Set Date / Time when Mutext was Opened\r\n$ListViewItem.SubItems[3].Text = [DateTime]::Now.ToString(\"g\")\r\n\r\n# --------------------------------------------------------------------------------\r\n# The Synced HashTable has an Object Property to share information between Threads\r\n# --------------------------------------------------------------------------------\r\nIf ([String]::IsNullOrEmpty($SyncedHash.Object))\r\n{\r\n  $SyncedHash.Object = \"First\"\r\n}\r\n$ListViewItem.SubItems[4].Text = $SyncedHash.Object\r\n$SyncedHash.Object = $CurentItem\r\n\r\n# Release Mutex\r\n$MyMutex.ReleaseMutex()\r\n\r\n# Random Number Generator\r\n$Random = [System.Random]::New()\r\n\r\n# ---------------------------------------------------------\r\n# Gernate a Fake Error\r\n#\r\n# Make sure to use Error Catching to make sure thread exits\r\n# ---------------------------------------------------------\r\nTry\r\n{\r\n  Switch ($Random.Next(0, 3))\r\n  {\r\n    \"0\"\r\n    {\r\n      Throw \"This is a Fake Error!\"\r\n      Break\r\n    }\r\n    \"1\"\r\n    {\r\n      Throw \"Simulated Error!\"\r\n      Break\r\n    }\r\n    \"2\"\r\n    {\r\n      Throw \"Someing Failed!\"\r\n      Break\r\n    }\r\n    \"3\"\r\n    {\r\n      Throw \"Unknown Error!\"\r\n      Break\r\n    }\r\n  }\r\n}\r\nCatch\r\n{\r\n  # Save Error Mesage\r\n  $ListViewItem.SubItems[5].Text = $Error[0].Exception.Message\r\n}\r\n\r\n\r\nFor ($I = 8; $I -lt 16; $I++)\r\n{\r\n  $ListViewItem.SubItems[$I].Text = [DateTime]::Now.ToString(\"HH:mm:ss:ffff\")\r\n  [System.Threading.Thread]::Sleep(100)\r\n}\r\n\r\n$RndValue = $Random.Next(0, 3)\r\n$ListViewItem.SubItems[6].Text = $RndValue\r\n# Random Fail Simlater\r\nIf ($RndValue -eq 0)\r\n{\r\n  $WasSuccess = $False\r\n}\r\n$ListViewItem.SubItems[7].Text = $WasSuccess\r\n\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[1].Text = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[1].Text = \"Error\"\r\n}\r\n\r\nExit\r\n\r\n\r\n",
   "ColumnNames": [
     "List Item",
     "Status",
@@ -548,22 +562,40 @@ $SampleDemo = @'
 '@
 #endregion $SampleDemo
 
+#region $GetDomainInfo
 $GetDomainInfo = @'
 {
   "Modules": {},
   "Functions": {
-    "Get-MyADForest": {
-      "Name": "Get-MyADForest",
-      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Gets information about an Active Directory Forest.\r\n    .DESCRIPTION\r\n      Retrieves the Active Directory Forest object either for the current forest or for a specified forest name.\r\n    .PARAMETER Name\r\n      The name of the Active Directory forest to retrieve. This parameter is mandatory when using the \"Name\" parameter set.\r\n    .PARAMETER Current\r\n      Switch parameter. If specified, retrieves the current Active Directory forest. This parameter is mandatory when using the \"Current\" parameter set.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADForest -Current\r\n      Retrieves the current Active Directory forest.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADForest -Name \"contoso.com\"\r\n      Retrieves the Active Directory forest with the name \"contoso.com\".\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Current\")]\r\n  param (\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Name\")]\r\n    [String]$Name,\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Current\")]\r\n    [Switch]$Current\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  switch ($PSCmdlet.ParameterSetName)\r\n  {\r\n    \"Name\"\r\n    {\r\n      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Forest\r\n      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)\r\n      [System.DirectoryServices.ActiveDirectory.Forest]::GetForest($DirectoryContext)\r\n      $DirectoryContext = $Null\r\n      $DirectoryContextType = $Null\r\n      break\r\n    }\r\n    \"Current\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest()\r\n      break\r\n    }\r\n  }\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
-    },
     "Get-MyADObject": {
       "Name": "Get-MyADObject",
       "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Searches Active Directory and returns an AD SearchResultCollection.\r\n    .DESCRIPTION\r\n      Performs a search in Active Directory using the specified LDAP filter and returns a SearchResultCollection. \r\n      Supports specifying search root, server, credentials, properties to load, sorting, and paging options.\r\n    .PARAMETER LDAPFilter\r\n      The LDAP filter string to use for the search. Defaults to (objectClass=*).\r\n    .PARAMETER PageSize\r\n      The number of objects to return per page. Default is 1000.\r\n    .PARAMETER SizeLimit\r\n      The maximum number of objects to return. Default is 1000.\r\n    .PARAMETER SearchRoot\r\n      The LDAP path to start the search from. Defaults to the current domain root.\r\n    .PARAMETER ServerName\r\n      The name of the domain controller or server to query. If not specified, uses the default.\r\n    .PARAMETER SearchScope\r\n      The scope of the search. Valid values are Base, OneLevel, or Subtree. Default is Subtree.\r\n    .PARAMETER Sort\r\n      The direction to sort the results. Valid values are Ascending or Descending. Default is Ascending.\r\n    .PARAMETER SortProperty\r\n      The property name to sort the results by.\r\n    .PARAMETER PropertiesToLoad\r\n      An array of property names to load for each result.\r\n    .PARAMETER Credential\r\n      The credentials to use when searching Active Directory.\r\n    .EXAMPLE\r\n      Get-MyADObject -LDAPFilter \"(objectClass=user)\" -SearchRoot \"OU=Users,DC=domain,DC=com\"\r\n      Searches for all user objects in the specified OU.\r\n    .EXAMPLE\r\n      Get-MyADObject -ServerName \"dc01.domain.com\" -PropertiesToLoad \"samaccountname\",\"mail\"\r\n      Searches using a specific domain controller and returns only the samaccountname and mail properties.\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Default\")]\r\n  param (\r\n    [String]$LDAPFilter = \"(objectClass=*)\",\r\n    [Long]$PageSize = 1000,\r\n    [Long]$SizeLimit = 1000,\r\n    [String]$SearchRoot = \"LDAP://$($([ADSI]\u0027\u0027).distinguishedName)\",\r\n    [String]$ServerName,\r\n    [ValidateSet(\"Base\", \"OneLevel\", \"Subtree\")]\r\n    [System.DirectoryServices.SearchScope]$SearchScope = \"SubTree\",\r\n    [ValidateSet(\"Ascending\", \"Descending\")]\r\n    [System.DirectoryServices.SortDirection]$Sort = \"Ascending\",\r\n    [String]$SortProperty,\r\n    [String[]]$PropertiesToLoad,\r\n    [PSCredential]$Credential\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  $MySearcher = [System.DirectoryServices.DirectorySearcher]::New($LDAPFilter, $PropertiesToLoad, $SearchScope)\r\n\r\n  $MySearcher.PageSize = $PageSize\r\n  $MySearcher.SizeLimit = $SizeLimit\r\n\r\n  $TempSearchRoot = $SearchRoot.ToUpper()\r\n  switch -regex ($TempSearchRoot)\r\n  {\r\n    \"(?:LDAP|GC)://*\"\r\n    {\r\n      if ($PSBoundParameters.ContainsKey(\"ServerName\"))\r\n      {\r\n        $MySearchRoot = $TempSearchRoot -replace \"(?\u003cLG\u003e(?:LDAP|GC)://)(?:[\\w\\d\\.-]+/)?(?\u003cDN\u003e.+)\", \"`${LG}$($ServerName)/`${DN}\"\r\n      }\r\n      else\r\n      {\r\n        $MySearchRoot = $TempSearchRoot\r\n      }\r\n      break\r\n    }\r\n    default\r\n    {\r\n      if ($PSBoundParameters.ContainsKey(\"ServerName\"))\r\n      {\r\n        $MySearchRoot = \"LDAP://$($ServerName)/$($TempSearchRoot)\"\r\n      }\r\n      else\r\n      {\r\n        $MySearchRoot = \"LDAP://$($TempSearchRoot)\"\r\n      }\r\n      break\r\n    }\r\n  }\r\n\r\n  if ($PSBoundParameters.ContainsKey(\"Credential\"))\r\n  {\r\n    $MySearcher.SearchRoot = [System.DirectoryServices.DirectoryEntry]::New($MySearchRoot, ($Credential.UserName), (($Credential.GetNetworkCredential()).Password))\r\n  }\r\n  else\r\n  {\r\n    $MySearcher.SearchRoot = [System.DirectoryServices.DirectoryEntry]::New($MySearchRoot)\r\n  }\r\n\r\n  if ($PSBoundParameters.ContainsKey(\"SortProperty\"))\r\n  {\r\n    $MySearcher.Sort.PropertyName = $SortProperty\r\n    $MySearcher.Sort.Direction = $Sort\r\n  }\r\n\r\n  $MySearcher.FindAll()\r\n\r\n  $MySearcher.Dispose()\r\n  $MySearcher = $Null\r\n  $MySearchRoot = $Null\r\n  $TempSearchRoot = $Null\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
+    },
+    "Get-MyADForest": {
+      "Name": "Get-MyADForest",
+      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Gets information about an Active Directory Forest.\r\n    .DESCRIPTION\r\n      Retrieves the Active Directory Forest object either for the current forest or for a specified forest name.\r\n    .PARAMETER Name\r\n      The name of the Active Directory forest to retrieve. This parameter is mandatory when using the \"Name\" parameter set.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADForest\r\n      Retrieves the current Active Directory forest.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADForest -Name \"contoso.com\"\r\n      Retrieves the Active Directory forest with the name \"contoso.com\".\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Current\")]\r\n  param (\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Name\")]\r\n    [String]$Name\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  switch ($PSCmdlet.ParameterSetName)\r\n  {\r\n    \"Name\"\r\n    {\r\n      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Forest\r\n      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)\r\n      [System.DirectoryServices.ActiveDirectory.Forest]::GetForest($DirectoryContext)\r\n      $DirectoryContext = $Null\r\n      $DirectoryContextType = $Null\r\n      break\r\n    }\r\n    \"Current\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest()\r\n      break\r\n    }\r\n  }\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
+    },
+    "Get-MyADDomain": {
+      "Name": "Get-MyADDomain",
+      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Gets information about an Active Directory Domain.\r\n    .DESCRIPTION\r\n      Retrieves the Active Directory Domain object either for the current domain, a specified domain name, or the domain associated with the local computer.\r\n    .PARAMETER Name\r\n      The name of the Active Directory domain to retrieve. This parameter is mandatory when using the \"Name\" parameter set.\r\n    .PARAMETER Computer\r\n      Switch parameter. If specified, retrieves the Active Directory domain associated with the local computer. This parameter is mandatory when using the \"Computer\" parameter set.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain\r\n      Retrieves the current Active Directory domain.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Computer\r\n      Retrieves the Active Directory domain associated with the local computer.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Name \"contoso.com\"\r\n      Retrieves the Active Directory domain with the name \"contoso.com\".\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Current\")]\r\n  param (\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Name\")]\r\n    [String]$Name,\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Computer\")]\r\n    [Switch]$Computer\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  switch ($PSCmdlet.ParameterSetName)\r\n  {\r\n    \"Name\"\r\n    {\r\n      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Domain\r\n      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)\r\n      [System.DirectoryServices.ActiveDirectory.Domian]::GetDomain($DirectoryContext)\r\n      $DirectoryContext = $Null\r\n      $DirectoryContextType = $Null\r\n      break\r\n    }\r\n    \"Computer\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain()\r\n      break\r\n    }\r\n    \"Current\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()\r\n      break\r\n    }\r\n  }\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
     }
   },
-  "Variables": {},
+  "Variables": {
+    "GetADDomain": {
+      "Name": "GetADDomain",
+      "Value": "Current"
+    },
+    "LDAPFilter": {
+      "Name": "LDAPFilter",
+      "Value": "X"
+    },
+    "GetADForest": {
+      "Name": "GetADForest",
+      "Value": "Current"
+    }
+  },
   "ThreadCount": 4,
-  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n\r\n# Common Columns\r\n$ItemCol = 0\r\n$DataCol = 1\r\n$StatusCol = 2\r\n$DateTimeCol = 3\r\n$ErrorCol = 4\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$StatusCol].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Paused)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[1].Text = \"Pause\"\r\n  While ($SyncedHash.Paused)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$CurrentItem = $ListViewItem.SubItems[$ItemCol].Text\r\nTry\r\n{\r\n  \r\n  # Get / Update Shared Object / Value\r\n  If ([System.String]::IsNullOrEmpty($SyncedHash.Object))\r\n  {\r\n    $SyncedHash.Object = \"First Item\"\r\n  }\r\n  $ListViewItem.SubItems[$DataCol].Text = $SyncedHash.Object\r\n  $SyncedHash.Object = $CurrentItem\r\n  \r\n  # ---------------------------------------------------------\r\n  # Open and wait for Mutex - Limit Access to Shared Resource\r\n  # ---------------------------------------------------------\r\n  $MyMutex = [System.Threading.Mutex]::OpenExisting($Mutex)\r\n  [Void]($MyMutex.WaitOne())\r\n  \r\n  # Access / Update Shared Resources\r\n  # $CurrentItem | Out-File -Encoding ascii -FilePath \"C:\\SharedFile.txt\"\r\n  \r\n  # Release Mutex\r\n  $MyMutex.ReleaseMutex()\r\n  \r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Error\"\r\n}\r\n\r\nWrite-Host -Object $ListViewItem.ImageKey\r\n\r\nExit\r\n\r\n\r\n",
+  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n\r\n# Common Columns\r\n$ItemCol = 0\r\n$DataCol = 1\r\n$StatusCol = 2\r\n$DateTimeCol = 3\r\n$ErrorCol = 4\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$StatusCol].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Pause)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[1].Text = \"Pause\"\r\n  While ($SyncedHash.Pause)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$CurrentItem = $ListViewItem.SubItems[$ItemCol].Text\r\nTry\r\n{\r\n  \r\n  # Get / Update Shared Object / Value\r\n  If ([System.String]::IsNullOrEmpty($SyncedHash.Object))\r\n  {\r\n    $SyncedHash.Object = \"First Item\"\r\n  }\r\n  $ListViewItem.SubItems[$DataCol].Text = $SyncedHash.Object\r\n  $SyncedHash.Object = $CurrentItem\r\n  \r\n  # ---------------------------------------------------------\r\n  # Open and wait for Mutex - Limit Access to Shared Resource\r\n  # ---------------------------------------------------------\r\n  $MyMutex = [System.Threading.Mutex]::OpenExisting($Mutex)\r\n  [Void]($MyMutex.WaitOne())\r\n  \r\n  # Access / Update Shared Resources\r\n  # $CurrentItem | Out-File -Encoding ascii -FilePath \"C:\\SharedFile.txt\"\r\n  \r\n  # Release Mutex\r\n  $MyMutex.ReleaseMutex()\r\n  \r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Error\"\r\n}\r\n\r\nWrite-Host -Object $ListViewItem.ImageKey\r\n\r\nExit\r\n\r\n\r\n",
   "ColumnNames": [
     "Column Name 00",
     "Column Name 01",
@@ -576,10 +608,19 @@ $GetDomainInfo = @'
     "Column Name 08",
     "Column Name 09",
     "Column Name 10",
-    "Column Name 11"
+    "Column Name 11",
+    "Column Name 12",
+    "Column Name 13",
+    "Column Name 14",
+    "Column Name 15",
+    "Column Name 16",
+    "Column Name 17",
+    "Column Name 18",
+    "Column Name 19"
   ]
 }
 '@
+#endregion $GetDomainInfo
 
 #region Basic Starter Script
 $StarterConfig = @'
@@ -587,8 +628,8 @@ $StarterConfig = @'
   "Modules": {},
   "Functions": {},
   "Variables": {},
-  "ThreadCount": 8,
-  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n\r\n# Common Columns\r\n$ItemCol = 0\r\n$DataCol = 1\r\n$StatusCol = 2\r\n$DateTimeCol = 3\r\n$ErrorCol = 4\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$StatusCol].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Paused)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[1].Text = \"Pause\"\r\n  While ($SyncedHash.Paused)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$CurrentItem = $ListViewItem.SubItems[$ItemCol].Text\r\nTry\r\n{\r\n  \r\n  # Get / Update Shared Object / Value\r\n  If ([System.String]::IsNullOrEmpty($SyncedHash.Object))\r\n  {\r\n    $SyncedHash.Object = \"First Item\"\r\n  }\r\n  $ListViewItem.SubItems[$DataCol].Text = $SyncedHash.Object\r\n  $SyncedHash.Object = $CurrentItem\r\n  \r\n  # ---------------------------------------------------------\r\n  # Open and wait for Mutex - Limit Access to Shared Resource\r\n  # ---------------------------------------------------------\r\n  $MyMutex = [System.Threading.Mutex]::OpenExisting($Mutex)\r\n  [Void]($MyMutex.WaitOne())\r\n  \r\n  # Access / Update Shared Resources\r\n  # $CurrentItem | Out-File -Encoding ascii -FilePath \"C:\\SharedFile.txt\"\r\n  \r\n  # Release Mutex\r\n  $MyMutex.ReleaseMutex()\r\n  \r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Error\"\r\n}\r\n\r\nWrite-Host -Object $ListViewItem.ImageKey\r\n\r\nExit\r\n\r\n\r\n",
+  "ThreadCount": 4,
+  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n\r\n# Common Columns\r\n$ItemCol = 0\r\n$DataCol = 1\r\n$StatusCol = 2\r\n$DateTimeCol = 3\r\n$ErrorCol = 4\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$StatusCol].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Pause)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[1].Text = \"Pause\"\r\n  While ($SyncedHash.Pause)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$CurrentItem = $ListViewItem.SubItems[$ItemCol].Text\r\nTry\r\n{\r\n  \r\n  # Get / Update Shared Object / Value\r\n  If ([System.String]::IsNullOrEmpty($SyncedHash.Object))\r\n  {\r\n    $SyncedHash.Object = \"First Item\"\r\n  }\r\n  $ListViewItem.SubItems[$DataCol].Text = $SyncedHash.Object\r\n  $SyncedHash.Object = $CurrentItem\r\n  \r\n  # ---------------------------------------------------------\r\n  # Open and wait for Mutex - Limit Access to Shared Resource\r\n  # ---------------------------------------------------------\r\n  $MyMutex = [System.Threading.Mutex]::OpenExisting($Mutex)\r\n  [Void]($MyMutex.WaitOne())\r\n  \r\n  # Access / Update Shared Resources\r\n  # $CurrentItem | Out-File -Encoding ascii -FilePath \"C:\\SharedFile.txt\"\r\n  \r\n  # Release Mutex\r\n  $MyMutex.ReleaseMutex()\r\n  \r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$StatusCol].Text = \"Error\"\r\n}\r\n\r\nWrite-Host -Object $ListViewItem.ImageKey\r\n\r\nExit\r\n\r\n\r\n",
   "ColumnNames": [
     "Column Name 00",
     "Column Name 01",
@@ -615,37 +656,99 @@ $StarterConfig = @'
 
 #region ******** My Default Enumerations ********
 
-#region ******** enum PILColumns ********
-Enum PILColumns
+#region ******** enum MyAnswer ********
+[Flags()]
+Enum MyAnswer
 {
-  Column00 = 0
-  Column01 = 1
-  Column02 = 2
-  Column03 = 3
-  Column04 = 4
-  Column05 = 5
-  Column06 = 6
-  Column07 = 7
-  Column08 = 8
-  Column09 = 9
-  Column10 = 10
-  Column11 = 11
-  Column12 = 12
-  Column13 = 13
-  Column14 = 14
-  Column15 = 15
-  Column16 = 16
-  Column17 = 17
-  Column18 = 18
-  Column19 = 19
-  Column20 = 20
-  Column21 = 21
-  Column22 = 22
-  Column23 = 23
+  Unknown = 0
+  No = 1
+  Yes = 2
+  Maybe = 3
 }
-#endregion ******** enum PILColumns ********
+#endregion ******** enum MyAnswer ********
+
+#region ******** enum MyDigit ********
+Enum MyDigit
+{
+  Zero
+  One
+  Two
+  Three
+  Four
+  Five
+  Six
+  Seven
+  Eight
+  Nine
+}
+#endregion ******** enum MyDigit ********
+
+#region ******** enum MyBits ********
+[Flags()]
+Enum MyBits
+{
+  Bit01 = 0x00000001
+  Bit02 = 0x00000002
+  Bit03 = 0x00000004
+  Bit04 = 0x00000008
+  Bit05 = 0x00000010
+  Bit06 = 0x00000020
+  Bit07 = 0x00000040
+  Bit08 = 0x00000080
+  Bit09 = 0x00000100
+  Bit10 = 0x00000200
+  Bit11 = 0x00000400
+  Bit12 = 0x00000800
+  Bit13 = 0x00001000
+  Bit14 = 0x00002000
+  Bit15 = 0x00004000
+  Bit16 = 0x00008000
+}
+#endregion ******** enum MyBits ********
 
 #endregion ******** My Default Enumerations ********
+
+#region ******** My Custom Class ********
+
+#region ******** MyListItem Class ********
+Class MyListItem
+{
+  [String]$Text
+  [Object]$Value
+  [Object]$Tag
+  [MyBits]$Flags
+  
+  MyListItem ([String]$Text, [Object]$Value)
+  {
+    $This.Text = $Text
+    $This.Value = $Value
+  }
+  
+  MyListItem ([String]$Text, [Object]$Value, [MyBits]$Flags)
+  {
+    $This.Text = $Text
+    $This.Value = $Value
+    $This.Flags = $Flags
+  }
+  
+  MyListItem ([String]$Text, [Object]$Value, [Object]$Tag)
+  {
+    $This.Text = $Text
+    $This.Value = $Value
+    $This.Tag = $Tag
+  }
+  
+  MyListItem ([String]$Text, [Object]$Value, [Object]$Tag, [MyBits]$Flags)
+  {
+    $This.Text = $Text
+    $This.Value = $Value
+    $This.Tag = $Tag
+    $This.Flags = $Flags
+  }
+}
+#endregion ******** MyListItem Class ********
+
+#endregion ******** My Custom Class ********
 
 #region ******** Windows APIs ********
 
@@ -4866,6 +4969,8 @@ Function Get-MultiTextBoxInput ()
       Ordered List (HashTable) if Names and Values
     .PARAMETER ValidCars
       Valid Inputy Chatacters
+    .PARAMETER MaxLength
+      Maximum Length of Text Input
     .PARAMETER Width
       With of Get-MultiTextBoxInput Dialog Window
     .PARAMETER ButtonLeft
@@ -4897,6 +5002,7 @@ Function Get-MultiTextBoxInput ()
     [parameter(Mandatory = $True)]
     [System.Collections.Specialized.OrderedDictionary]$OrderedItems,
     [String]$ValidChars = "[\s\w\d\.\-_]",
+    [Int]$MaxLength = [Int]::MaxValue,
     [Int]$Width = 35,
     [String]$ButtonLeft = "&OK",
     [String]$ButtonMid = "&Reset",
@@ -5291,7 +5397,7 @@ Function Get-MultiTextBoxInput ()
     $MultiTextBoxInputTextBox.Font = [MyConfig]::Font.Regular
     $MultiTextBoxInputTextBox.ForeColor = [MyConfig]::Colors.TextFore
     $MultiTextBoxInputTextBox.Location = [System.Drawing.Size]::New(($TmpLabel.Right + [MyConfig]::FormSpacer), $TmpLabel.Top)
-    $MultiTextBoxInputTextBox.MaxLength = 25
+    $MultiTextBoxInputTextBox.MaxLength = $MaxLength
     $MultiTextBoxInputTextBox.Name = "$($Key)"
     $MultiTextBoxInputTextBox.TabStop = $True
     $MultiTextBoxInputTextBox.Text = $OrderedItems[$Key]
@@ -11844,20 +11950,29 @@ Function Load-PILConfigFIleXml()
       # Add / Update PIL Columns
       $RichTextBox.SelectionIndent = 20
       Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Number of Columns" -Value ($TmpConfig.ColumnNames.Count)
-      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = $Null
+      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::CurrentColumns - [MyRuntime]::MinColumns].ImageKey = $Null
       [MyRuntime]::UpdateTotalColumn($TmpConfig.ColumnNames.Count)
-      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
+      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::CurrentColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
       $RichTextBox.SelectionIndent = 30
       $PILItemListListView.BeginUpdate()
       $PILItemListListView.Columns.Clear()
       $PILItemListListView.Items.Clear()
       [MyRuntime]::ThreadConfig.ColumnNames = $TmpConfig.ColumnNames
-      For ($I = 0; $I -lt ([MyRuntime]::MaxColumns); $I++)
+      For ($I = 0; $I -lt ([MyRuntime]::CurrentColumns); $I++)
       {
         New-ColumnHeader -ListView $PILItemListListView -Text ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Name ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Tag ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Width -2
       }
       $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
       New-ColumnHeader -ListView $PILItemListListView -Text " " -Name "Blank" -Tag " " -Width ($PILForm.Width * 4)
+      $PILItemListListView.EndUpdate()
+      
+      # Resize Columns
+      $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
+      If ($PILItemListListView.Items.Count -gt 0)
+      {
+        $PILItemListListView.Columns[0].Width = -1
+      }
+      $PILItemListListView.Columns[([MyRuntime]::CurrentColumns)].Width = ($PILForm.Width * 4)
       $PILItemListListView.EndUpdate()
       
       # Update Thread Script
@@ -12148,20 +12263,29 @@ Function Load-PILConfigFIleJson()
       # Add / Update PIL Columns
       $RichTextBox.SelectionIndent = 20
       Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Number of Columns" -Value ($TmpConfig.ColumnNames.Count)
-      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = $Null
+      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::CurrentColumns - [MyRuntime]::MinColumns].ImageKey = $Null
       [MyRuntime]::UpdateTotalColumn($TmpConfig.ColumnNames.Count)
-      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
+      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::CurrentColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
       $RichTextBox.SelectionIndent = 30
       $PILItemListListView.BeginUpdate()
       $PILItemListListView.Columns.Clear()
       $PILItemListListView.Items.Clear()
       [MyRuntime]::ThreadConfig.ColumnNames = $TmpConfig.ColumnNames
-      For ($I = 0; $I -lt ([MyRuntime]::MaxColumns); $I++)
+      For ($I = 0; $I -lt ([MyRuntime]::CurrentColumns); $I++)
       {
         New-ColumnHeader -ListView $PILItemListListView -Text ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Name ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Tag ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Width -2
       }
       $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
       New-ColumnHeader -ListView $PILItemListListView -Text " " -Name "Blank" -Tag " " -Width ($PILForm.Width * 4)
+      $PILItemListListView.EndUpdate()
+      
+      # Resize Columns
+      $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
+      If ($PILItemListListView.Items.Count -gt 0)
+      {
+        $PILItemListListView.Columns[0].Width = -1
+      }
+      $PILItemListListView.Columns[([MyRuntime]::CurrentColumns)].Width = ($PILForm.Width * 4)
       $PILItemListListView.EndUpdate()
       
       # Update Thread Script
@@ -12422,6 +12546,7 @@ Function Load-PILDataExport()
             ($PILItemListListView.Items.Add([System.Windows.Forms.ListViewItem]::New(@($TmpDataItem.PSObject.Properties | Select-Object -ExpandProperty Value), "StatusInfo16Icon", [MyConfig]::Colors.TextFore, [MyConfig]::Colors.TextBack, [MyConfig]::Font.Regular))).Name = $TmpName
           }
         }
+        
         $PILItemListListView.EndUpdate()
         Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Imported $($PILItemListListView.Items.Count - $TmpCurRowCount) List Items" -ValueFore ([MyConfig]::Colors.TextFore)
       }
@@ -12590,17 +12715,45 @@ Function Start-ProcessingItems()
     "UpIcon"    = "Up16Icon"
     "DownIcon"  = "Down16Icon"
   }
-    
+  
+  $ChkPrompt = [Ordered]@{}
+  [MyRuntime]::ThreadConfig.Variables.Values | Where-Object -FilterScript { $PSItem.Value -eq "*" } | ForEach-Object -Process { $ChkPrompt.Add($PSItem.Name, "")}
+  If ($ChkPrompt.Count)
+  {
+    $DialogResult = Get-MultiTextBoxInput -Title "Prompt Variables" -Message "Enter the Runtime Values for the Indicated Variables." -OrderedItems $ChkPrompt -AllRequired -ValidChars "."
+    If ($DialogResult.Success)
+    {
+      $Response = Get-UserResponse -Title "Save Values?" -Message "Do you want to Save These Values for this Session?" -ButtonLeft Yes -ButtonRight No -ButtonDefault No -Icon ([System.Drawing.SystemIcons]::Question)
+      If (-not $Response.Success)
+      {
+        $TmpNames = @($DialogResult.OrderedItems.Keys)
+        ForEach ($Key In $DialogResult.OrderedItems.Keys)
+        {
+          [MyRuntime]::ThreadConfig.Variables[$Key].Value = $DialogResult.OrderedItems[$Key]
+        }
+      }
+      Else
+      {
+        $TmpNames = @()
+      }
+      ForEach ($Key In $DialogResult.OrderedItems.Keys)
+      {
+        $TmpVariables.Add($Key, $DialogResult.OrderedItems[$Key])
+      }
+    }
+  }
+  
   # Add Common Variables
   Write-RichTextBox -RichTextBox $RichTextBox -Text "Adding Custom Runspace Pool Variables"
   $RichTextBox.SelectionIndent = 30
   If ([MyRuntime]::ThreadConfig.Variables.Count -gt 0)
   {
-    ForEach ($Variable In [MyRuntime]::ThreadConfig.Variables.Values)
+    ForEach ($Variable In @([MyRuntime]::ThreadConfig.Variables.Values | Where-Object -FilterScript { $PSItem.Name -notin $TmpNames }))
     {
       $TmpVariables.Add($Variable.Name, $Variable.Value)
     }
   }
+  
   $PoolParams.Add("Variables", $TmpVariables)
   Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Found $([MyRuntime]::ThreadConfig.Variables.Count) Runspace Pool Variables" -ValueFore ([MyConfig]::Colors.TextFore)
   
@@ -13385,7 +13538,7 @@ function Update-ThreadConfiguration ()
       "Add"
       {
         $OrderedItems = [Ordered]@{ "Variable Name"= ""; "Variable Value" = "" }
-        $DialogResult = Get-MultiTextBoxInput -Title "Add Variable" -Message "Add New Common Variable Name and Value" -OrderedItems $OrderedItems -AllRequired
+        $DialogResult = Get-MultiTextBoxInput -Title "Add Variable" -Message "Add New Common Variable Name and Value" -OrderedItems $OrderedItems -AllRequired -ValidChars "."
         If ($DialogResult.Success)
         {
           [Void]$PILTCVariablesListBox.Items.Add([PILVariable]::New($DialogResult.OrderedItems["Variable Name"], $DialogResult.OrderedItems["Variable Value"]))
@@ -13395,7 +13548,7 @@ function Update-ThreadConfiguration ()
       "Edit"
       {
         $OrderedItems = [Ordered]@{ "Variable Name" = $PILTCVariablesListBox.SelectedItem.Name; "Variable Value" = $PILTCVariablesListBox.SelectedItem.Value }
-        $DialogResult = Get-MultiTextBoxInput -Title "Edit Variable" -Message "Update Common Variable Name and Value" -OrderedItems $OrderedItems -AllRequired
+        $DialogResult = Get-MultiTextBoxInput -Title "Edit Variable" -Message "Update Common Variable Name and Value" -OrderedItems $OrderedItems -AllRequired -ValidChars "."
         If ($DialogResult.Success)
         {
           $PILTCVariablesListBox.Items.RemoveAt($PILTCVariablesListBox.SelectedIndex)
@@ -14825,6 +14978,38 @@ HbwgIiD/Hh8d/x4fHv8dIB7/GRsb/xkZG/8eHR7/LCwq/0RDQP9ZV1L/VFJNvDMzAAUAAAAA////AQAA
 #endregion ******** $Demo16Icon ********
 $PILSmallImageList.Images.Add("Demo16Icon", [System.Drawing.Icon]::New([System.IO.MemoryStream]::New([System.Convert]::FromBase64String($Demo16Icon))))
 
+#region ******** $AddCol16Icon ********
+$AddCol16Icon = @"
+AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAAAA4AAAAWAAAAFcAAAA2AAAABQAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAADAEHAoYOSx3tGoIu/yCaM/8imC3/HXwi/xFFEesBBQGDAAAACwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIwczF9ods03/JMVL/yu7N/8tti3/LrUr/y62LP8tty//KJ8m/wsr
+CdcAAAAhAAAAAAAAAAAAAAAAAAAAEQc5HN0cy2H/JsJF/y62LP83uTT/Zshi/2bIYv83uTT/LrYr/y23Lv8tsCr/DC8K2wAAAA8AAAAAAAAAAAENB5QXw2f/I8dQ/yq7N/8quzf/TMZX////////////TMZX/yq7
+N/8quzf/K7o0/yqlJ/8CCgKSAAAAAAAAAAwJYTf1GtVw/ybBRf8nwUT/J8FE/0nLYv///////////0nLYv8nwUT/J8FE/yfBRP8rujT/FFAT9AAAAAsAAABCDqBe/xzSaf8jx1H/k+Oo/7vtyP/G8NH/////////
+///G8NH/u+3I/5PjqP8jx1H/J8FD/x+EJP8AAABCAAAAWg+5cf8a1W7/H81e/8Px1P/////////////////////////////////D8dT/H81e/yPHUP8jmi7/AAAAWgAAAFsPunL/F9t7/xvTav+D6LD/qe/J/7fx
+0f///////////7fx0f+p78n/g+iw/xvTav8hylf/IZ00/wAAAFoAAABEEJ9a/xLijP8X2Xf/F9l3/xfZd/88343///////////88343/F9l3/xfZd/8X2Xf/IshT/xyLMf8AAABCAAAADQ9aJvUP55f/EuGJ/xTf
+hP8U34T/OeSX////////////OeSX/xTfhP8U34T/Gddy/yLIU/8RVR31AAAADAAAAAADCgGVFsVs/w/nl/8R5JD/EeSQ/xjllP9A6qf/QOqn/xjllP8R5JD/Ftx//x/OX/8euE//AwoBlQAAAAAAAAAAAAAAEQsz
+D94U2YH/D+eX/xDlk/8P5pT/D+eW/w/mlf8S4oz/F9p6/xvUa/8azmj/CzQR3gAAABEAAAAAAAAAAAAAAAAAAAAkCTES2RPCcP8O6Jn/EOaU/xLhiv8T34T/FN6C/xPfhv8UwGz/CDIU2gAAACQAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAwABwOFCFQw7Aeebf8Ex5T/A8iY/wagcf8HVjPsAAcEhgAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAAAA3AAAAVwAAAFcAAAA3AAAABQAAAAAAAAAAAAAAAAAA
+AAAAAAAA+B+sQeAHrEHAA6xBgAGsQYABrEEAAKxBAACsQQAArEEAAKxBAACsQQAArEGAAaxBgAGsQcADrEHgB6xB+B+sQQ==
+"@
+#endregion ******** $AddCol16Icon ********
+$PILSmallImageList.Images.Add("AddCol16Icon", [System.Drawing.Icon]::New([System.IO.MemoryStream]::New([System.Convert]::FromBase64String($AddCol16Icon))))
+
+#region ******** $RemoveCol16Icon ********
+$RemoveCol16Icon = @"
+AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAAAA4AAAAWAAAAFcAAAA2AAAABQAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAADAAAB4YAAFLtAACP/wAAqv8AAKn/AACK/wAATesAAAaDAAAACwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIwAAN9oAAMD/AADW/wAA0P8AAM3/AADM/wAAzf8AAM7/AACz/wAA
+MdcAAAAhAAAAAAAAAAAAAAAAAAAAEQAAPN0AANn/AADU/wAAzf8AAMz/AADM/wAAzP8AAMz/AADM/wAAzf8AAMf/AAA12wAAAA8AAAAAAAAAAAAADZQAAM7/AADY/wAA0P8AAND/AADQ/wAA0P8AAND/AADQ/wAA
+0P8AAND/AADP/wAAuf8AAAuSAAAAAAAAAAwAAGb1AADi/wAA1P8AANT/AADU/wAA1P8AANT/AADU/wAA1P8AANT/AADU/wAA1P8AAM//AABa9AAAAAsAAABCAACn/wAA4P8AANj/oaHw/7q69P+6uvT/urr0/7q6
+9P+6uvT/urr0/6Gh8P8AANj/AADU/wAAlP8AAABCAAAAWgAAwP8AAOH/AADc/9zc+v/////////////////////////////////c3Pr/AADc/wAA2P8AAKv/AAAAWgAAAFsAAb//AADl/wAA4P+Tk/L/qan1/6mp
+9f+pqfX/qan1/6mp9f+pqfX/k5Py/wAA4P8AANr/AAGr/wAAAFoAAABEAAOg/wAA6/8AAOT/AADk/wAA5P8AAOT/AADk/wAA5P8AAOT/AADk/wAA5P8AAOT/AADZ/wADkv8AAABCAAAADQAEVvUAAe7/AADq/wAA
+6P8AAOj/AADo/wAA6P8AAOj/AADo/wAA6P8AAOj/AADj/wAB2f8ABFT1AAAADAAAAAAAAAmVAAfD/wAA7v8AAOz/AADs/wAA7P8AAOz/AADs/wAA7P8AAOz/AADn/wAA3f8AB7v/AAAJlQAAAAAAAAAAAAAAEQAB
+L94ACtf/AADu/wAA7f8AAO3/AADu/wAA7f8AAOv/AADl/wAA4P8ACtD/AAEw3gAAABEAAAAAAAAAAAAAAAAAAAAkAAAt2QAJvf8ACuv/AAPt/wAA6v8AAOj/AAPo/wAK5v8ACb3/AAAv2gAAACQAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAwAAAeFAABR7AAGnP8ACsb/AArI/wAGnv8AAFPsAAAHhgAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAAAA3AAAAVwAAAFcAAAA3AAAABQAAAAAAAAAAAAAAAAAA
+AAAAAAAA+B+sQeAHrEHAA6xBgAGsQYABrEEAAKxBAACsQQAArEEAAKxBAACsQQAArEGAAaxBgAGsQcADrEHgB6xB+B+sQQ==
+"@
+#endregion ******** $RemoveCol16Icon ********
+$PILSmallImageList.Images.Add("RemoveCol16Icon", [System.Drawing.Icon]::New([System.IO.MemoryStream]::New([System.Convert]::FromBase64String($RemoveCol16Icon))))
+
 #endregion ******** PIL Small Image Icons ********
 
 
@@ -15739,7 +15924,7 @@ function Start-PILItemListListViewColumnClick
   Write-Verbose -Message "Enter ColumnClick Event for $($MyInvocation.MyCommand)"
 
   [MyConfig]::AutoExit = 0
-
+  
   $Sender.ListViewItemSorter.Column = $EventArg.Column
   $Sender.ListViewItemSorter.Ascending = (-not $Sender.ListViewItemSorter.Ascending)
   $Sender.Sort()
@@ -15885,7 +16070,7 @@ function Start-PILItemListListViewMouseDown
   Write-Verbose -Message "Enter MouseDown Event for $($MyInvocation.MyCommand)"
 
   [MyConfig]::AutoExit = 0
-
+  
   If ($EventArg.Button -eq [System.Windows.Forms.MouseButtons]::Right)
   {
     If (-not [String]::IsNullOrEmpty(($TmpItem = $Sender.GetItemAt($EventArg.Location.X, $EventArg.Location.Y))))
@@ -15918,6 +16103,9 @@ function Start-PILItemListListViewMouseDown
     $PILItemListContextMenuStrip.Items["Check"].Enabled = ($TmpMenuText -ne "None")
     $PILItemListContextMenuStrip.Items["Uncheck"].Enabled = ($TmpMenuText -ne "None")
     
+    $PILItemListContextMenuStrip.Items["AddCol"].Enabled = ($PILItemListListView.Columns.Count -lt ([MyRuntime]::MaxColumns - 1))
+    $PILItemListContextMenuStrip.Items["RemoveCol"].Enabled = ($PILItemListListView.Columns.Count -gt ([MyRuntime]::MinColumns + 1))
+    
     $PILItemListContextMenuStrip.Show($Sender, $EventArg.Location)
   }
   
@@ -15926,7 +16114,7 @@ function Start-PILItemListListViewMouseDown
 #endregion ******** Function Start-PILItemListListViewMouseDown ********
 $PILItemListListView.add_MouseDown({Start-PILItemListListViewMouseDown -Sender $This -EventArg $PSItem})
 
-For ($I = 0; $I -lt [MyRuntime]::StartColumns; $I++)
+For ($I = 0; $I -lt [MyRuntime]::CurrentColumns; $I++)
 {
   New-ColumnHeader -ListView $PILItemListListView -Text ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Name ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Tag ([MyRuntime]::ThreadConfig.ColumnNames[$I])
 }
@@ -16117,18 +16305,21 @@ Function Start-PILItemListContextMenuStripItemClick
     }
     "Header"
     {
+      #region Resize Header
       $PILItemListListView.BeginUpdate()
       $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
       If ($PILItemListListView.Items.Count -gt 0)
       {
         $PILItemListListView.Columns[0].Width = -1
       }
-      $PILItemListListView.Columns[([MyRuntime]::MaxColumns)].Width = ($PILForm.Width * 4)
+      $PILItemListListView.Columns[([MyRuntime]::CurrentColumns)].Width = ($PILForm.Width * 4)
       $PILItemListListView.EndUpdate()
       Break
+      #endregion Resize Header
     }
     "Content"
     {
+      #region Resize Content
       $PILItemListListView.BeginUpdate()
       If ($PILItemListListView.Items.Count -eq 0)
       {
@@ -16138,21 +16329,26 @@ Function Start-PILItemListContextMenuStripItemClick
       {
         $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::ColumnContent)
       }
-      $PILItemListListView.Columns[([MyRuntime]::MaxColumns)].Width = ($PILForm.Width * 4)
+      $PILItemListListView.Columns[([MyRuntime]::CurrentColumns)].Width = ($PILForm.Width * 4)
       $PILItemListListView.EndUpdate()
       Break
+      #endregion Resize Content
     }
     "Check"
     {
+      #region Check All
       $TmpChecked = @($PILItemListListView.Items | Where-Object -FilterScript { -not $PSItem.Checked })
       $TmpChecked | ForEach-Object -Process { $PSItem.Checked = $True }
       Break
+      #endregion Check All
     }
     "UnCheck"
     {
+      #region Uncheck All
       $TmpChecked = @($PILItemListListView.Items | Where-Object -FilterScript { $PSItem.Checked })
       $TmpChecked | ForEach-Object -Process { $PSItem.Checked = $False }
       Break
+      #endregion Uncheck All
     }
     "Clear"
     {
@@ -16181,6 +16377,96 @@ Function Start-PILItemListContextMenuStripItemClick
       Break
       #endregion Clear Selected / Checked Item List
     }
+    "AddCol"
+    {
+      #region Add PIL Column
+      $PILBtmStatusStrip.Items["Status"].Text = "Add New PIL Column"
+      $PILBtmStatusStrip.Refresh()
+      $DialogResult = Get-TextBoxInput -Title "Add New Column" -Message "Enter the Name of the New Column, The Name must be Unique and not match any Existing Column Name." -MaxLength 25
+      If ($DialogResult.Success)
+      {
+        $AddName = $DialogResult.Items[0]
+        If ($AddName -in @($PILItemListListView.Columns | Select-Object -ExpandProperty Name))
+        {
+          $DialogResult = Get-UserResponse -Title "Invalid Column Name" -Message "There Already is an Existing Column with that Name." -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Warning)
+        }
+        Else
+        {
+          $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::CurrentColumns - [MyRuntime]::MinColumns].ImageKey = $Null
+          $PILItemListListView.BeginUpdate()
+          $PILItemListListView.Columns.RemoveAt(($PILItemListListView.Columns.Count - 1))
+          New-ColumnHeader -ListView $PILItemListListView -Text $AddName -Name $AddName -Tag $AddName -Width -1
+          New-ColumnHeader -ListView $PILItemListListView -Text " " -Name "Blank" -Tag " " -Width ($PILForm.Width * 4)
+          ForEach ($ListItem In $PILItemListListView.Items)
+          {
+            $ListItem.SubItems.Add("", "")
+          }
+          # Update Column Names
+          [MyRuntime]::AddPILColumn($AddName)
+          
+          # Resize Columns
+          $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
+          If ($PILItemListListView.Items.Count -gt 0)
+          {
+            $PILItemListListView.Columns[0].Width = -1
+          }
+          $PILItemListListView.Columns[([MyRuntime]::CurrentColumns)].Width = ($PILForm.Width * 4)
+          $PILItemListListView.EndUpdate()
+          
+          # Update Status
+          $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::CurrentColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
+          $PILBtmStatusStrip.Items["Status"].Text = "Success Adding PIL Column $($RemoveName)"
+        }
+      }
+      Else
+      {
+        $PILBtmStatusStrip.Items["Status"].Text = "Canceled Adding PIL Column"
+      }
+      Break
+      #endregion Add PIL Column
+    }
+    "RemoveCol"
+    {
+      #region Remove PIL Column
+      $PILBtmStatusStrip.Items["Status"].Text = "Remove Existing PIL Column"
+      $PILBtmStatusStrip.Refresh()
+      $TmpColNames = @([MyRuntime]::ThreadConfig.ColumnNames | Select-Object -Skip 1 | ForEach-Object -Process { [MyListItem]::new($PSItem, $PSItem) })
+      $DialogResult = Get-ComboBoxOption -Title "Remove Existing Column" -Message "Select Which Column do you would like to Remove." -Items $TmpColNames -DisplayMember "Text" -ValueMember "Value" -SelectText "Select Which Column to Remove"
+      If ($DialogResult.Success)
+      {
+        $RemoveName = $DialogResult.Item.Text
+        $RemoveIndex = $PILItemListListView.Columns[$RemoveName].Index
+        $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::CurrentColumns - [MyRuntime]::MinColumns].ImageKey = $Null
+        $PILItemListListView.BeginUpdate()
+        $PILItemListListView.Columns.RemoveAt($RemoveIndex)
+        ForEach ($ListItem In $PILItemListListView.Items)
+        {
+          $ListItem.SubItems.RemoveAt($RemoveIndex)
+        }
+        
+        # Update Column Names
+        [MyRuntime]::RemovePILComun($RemoveName)
+        
+        # Resize Columns
+        $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
+        If ($PILItemListListView.Items.Count -gt 0)
+        {
+          $PILItemListListView.Columns[0].Width = -1
+        }
+        $PILItemListListView.Columns[([MyRuntime]::CurrentColumns)].Width = ($PILForm.Width * 4)
+        $PILItemListListView.EndUpdate()
+        
+        # Update Status
+        $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::CurrentColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
+        $PILBtmStatusStrip.Items["Status"].Text = "Success Removing PIL Column $($RemoveName)"
+      }
+      Else
+      {
+        $PILBtmStatusStrip.Items["Status"].Text = "Canceled Removing PIL Column"
+      }
+      Break
+      #endregion Remove PIL Column
+    }
     "Reset"
     {
       #region Reset PIL
@@ -16197,12 +16483,12 @@ Function Start-PILItemListContextMenuStripItemClick
       }
       Else
       {
-        $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = $Null
+        $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::CurrentColumns - [MyRuntime]::MinColumns].ImageKey = $Null
         [MyRuntime]::UpdateTotalColumn([MyRuntime]::StartColumns)
         $PILItemListListView.BeginUpdate()
         $PILItemListListView.Columns.Clear()
         $PILItemListListView.Items.Clear()
-        For ($I = 0; $I -lt ([MyRuntime]::StartColumns); $I++)
+        For ($I = 0; $I -lt ([MyRuntime]::CurrentColumns); $I++)
         {
           New-ColumnHeader -ListView $PILItemListListView -Text ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Name ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Tag ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Width -2
         }
@@ -16211,9 +16497,9 @@ Function Start-PILItemListContextMenuStripItemClick
         $PILItemListListView.EndUpdate()
         
         [MyRuntime]::ConfigName = "Unknown Configuration"
-        $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
-        
+ 
         # Set Status Message
+        $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::CurrentColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
         $PILBtmStatusStrip.Items["Status"].Text = "Successfully Reset $([MyConfig]::ScriptName)"
       }
       Break
@@ -16235,6 +16521,9 @@ New-MenuSeparator -Menu $PILItemListContextMenuStrip
 (New-MenuItem -Menu $PILItemListContextMenuStrip -Text "Resize Content" -Name "Content" -Tag "Content" -DisplayStyle "ImageAndText" -ImageKey "Content16Icon" -PassThru).add_Click({Start-PILItemListContextMenuStripItemClick -Sender $This -EventArg $PSItem})
 New-MenuSeparator -Menu $PILItemListContextMenuStrip
 (New-MenuItem -Menu $PILItemListContextMenuStrip -Text "Clear" -Name "Clear" -Tag "Clear {0} Items" -DisplayStyle "ImageAndText" -ImageKey "Clear16Icon" -PassThru).add_Click({Start-PILItemListContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+New-MenuSeparator -Menu $PILItemListContextMenuStrip
+(New-MenuItem -Menu $PILItemListContextMenuStrip -Text "Add Column" -Name "AddCol" -Tag "AddCol" -DisplayStyle "ImageAndText" -ImageKey "AddCol16Icon" -PassThru).add_Click({Start-PILItemListContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $PILItemListContextMenuStrip -Text "Remove Column" -Name "RemoveCol" -Tag "RemoveCol" -DisplayStyle "ImageAndText" -ImageKey "RemoveCol16Icon" -PassThru).add_Click({Start-PILItemListContextMenuStripItemClick -Sender $This -EventArg $PSItem})
 New-MenuSeparator -Menu $PILItemListContextMenuStrip
 (New-MenuItem -Menu $PILItemListContextMenuStrip -Text "Reset" -Name "Reset" -Tag "Reset" -DisplayStyle "ImageAndText" -ImageKey "PILFormIcon" -PassThru).add_Click({Start-PILItemListContextMenuStripItemClick -Sender $This -EventArg $PSItem})
 
@@ -16341,7 +16630,13 @@ function Start-PILItelListToolStripItemClick
         $PILBtmStatusStrip.Refresh()
         
         # Terminate Threads
-        (Get-MyRSPool).SyncedHash["Terminate"] = $True
+        $TmpRSPool = Get-MyRSPool
+        $TmpRSPool.SyncedHash["Terminate"] = $True
+        
+        $PILItelListToolStrip.Items["Pause"].Checked = $False
+        $PILItelListToolStrip.Items["Stop"].Checked = $False
+        $PILItelListToolStrip.Items["Process"].Checked = $True
+        $TmpRSPool.SyncedHash["Pause"] = $Fasle
         
         # Set Status Message
         $PILBtmStatusStrip.Items["Status"].Text = "Proccessing List Items has been Terminated"
@@ -16361,6 +16656,31 @@ function Start-PILItelListToolStripItemClick
 $PILItelListToolStrip.Location = [System.Drawing.Point]::New((($PILMainPanel.ClientSize.Width - $PILItelListToolStrip.Width) / 2), ([MyConfig]::FormSpacer * 16))
 
 #endregion ******** $PILMainPanel Controls ********
+
+
+# ************************************************
+# PILPlay Panel
+# ************************************************
+#region $PILPlayPanel = [System.Windows.Forms.Panel]::New()
+$PILPlayPanel = [System.Windows.Forms.Panel]::New()
+$PILForm.Controls.Add($PILPlayPanel)
+$PILPlayPanel.BackColor = [MyConfig]::Colors.Back
+$PILPlayPanel.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+$PILPlayPanel.Dock = [System.Windows.Forms.DockStyle]::Top
+$PILPlayPanel.Enabled = $True
+$PILPlayPanel.Font = [MyConfig]::Font.Regular
+$PILPlayPanel.ForeColor = [MyConfig]::Colors.Fore
+$PILPlayPanel.Name = "PILPlayPanel"
+#$PILPlayPanel.TabIndex = 0
+#$PILPlayPanel.TabStop = $False
+#$PILPlayPanel.Tag = [System.Object]::New()
+#endregion $PILPlayPanel = [System.Windows.Forms.Panel]::New()
+
+$PILPlayPanel.Visible = $False
+#region ******** $PILMainPanel Controls ********
+
+#endregion ******** $PILMainPanel Controls ********
+
 
 # ************************************************
 # PILTop MenuStrip
@@ -16511,7 +16831,7 @@ function Start-PILTopMenuStripItemClick
           Else
           {
             $NewCount = 0
-            $TmpSubItems = @("") * [MyRuntime]::MaxColumns
+            $TmpSubItems = @("") * [MyRuntime]::CurrentColumns
             $PILItemListListView.BeginUpdate()
             ForEach ($TmpItem In $TmpItems)
             {
@@ -16525,6 +16845,7 @@ function Start-PILTopMenuStripItemClick
                 $NewCount++
               }
             }
+            $PILItemListListView.Columns[0].Width = -2
             $PILItemListListView.EndUpdate()
             
             # Success
@@ -16569,6 +16890,7 @@ function Start-PILTopMenuStripItemClick
         $DialogResult = Show-RichTextStatus -ScriptBlock $ScriptBlock -Title "Initializing $([MyConfig]::ScriptName)" -ButtonMid "OK" -HashTable $HashTable
         If ($DialogResult.Success)
         {
+          $PILItemListListView.Columns[0].Width = -2
           $PILBtmStatusStrip.Items["Status"].Text = "Successfully Loaded Exported PIL Data"
         }
         Else
@@ -16585,20 +16907,28 @@ function Start-PILTopMenuStripItemClick
     "TotalColumns"
     {
       #region Set Total Columns
-      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = $Null
+      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::CurrentColumns - [MyRuntime]::MinColumns].ImageKey = $Null
       [MyRuntime]::UpdateTotalColumn($Sender.Tag)
       $PILItemListListView.BeginUpdate()
       $PILItemListListView.Columns.Clear()
-      For ($I = 0; $I -lt ([MyRuntime]::MaxColumns); $I++)
+      For ($I = 0; $I -lt ([MyRuntime]::CurrentColumns); $I++)
       {
         New-ColumnHeader -ListView $PILItemListListView -Text ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Name ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Tag ([MyRuntime]::ThreadConfig.ColumnNames[$I]) -Width -2
       }
       $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
       New-ColumnHeader -ListView $PILItemListListView -Text " " -Name "Blank" -Tag " " -Width ($PILForm.Width * 4)
+      
+      # Resize Columns
+      $PILItemListListView.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
+      If ($PILItemListListView.Items.Count -gt 0)
+      {
+        $PILItemListListView.Columns[0].Width = -1
+      }
+      $PILItemListListView.Columns[([MyRuntime]::CurrentColumns)].Width = ($PILForm.Width * 4)
       $PILItemListListView.EndUpdate()
       
       [MyRuntime]::ConfigName = "Unknown Configuration"
-      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::MaxColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
+      $PILTopMenuStrip.Items["Configure"].DropDownItems["TotalColumns"].DropDownItems[[MyRuntime]::CurrentColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
       #endregion Set Total Columns
     }
     "ColumnNames"
@@ -16627,7 +16957,7 @@ function Start-PILTopMenuStripItemClick
       Break
       #endregion Set Column Names
     }
-    "ThreadScript"
+    "ThreadConfig"
     {
       #region Update Thread Config
       # Set Status Message
@@ -16640,7 +16970,7 @@ function Start-PILTopMenuStripItemClick
         If ($Response.Success)
         {
           # Save Export File
-          $PILSaveFileDialog.FileName = ""
+          $PILSaveFileDialog.FileName = [MyRuntime]::ConfigName
           $PILSaveFileDialog.Filter = "PIL Config Files|*.Xml;*.Json"
           $PILSaveFileDialog.FilterIndex = 1
           $PILSaveFileDialog.Title = "Save PIL Configuration File"
@@ -16944,6 +17274,23 @@ function Start-PILTopMenuStripItemClick
       If ($DialogResult.Success)
       {
         [MyRuntime]::ConfigName = $ConfigName
+        
+        If ($ConfigName -eq "Sample - Demo")
+        {
+          $PILItemListListView.BeginUpdate()
+          $TmpSubItems = @("") * [MyRuntime]::CurrentColumns
+          For ($I = 0; $I -lt 50; $I++)
+          {
+            $TmpListItem = [System.Windows.Forms.ListViewItem]::New(("Sample List Item {0:00}" -f $I), "StatusInfo16Icon")
+            $TmpListItem.Name = $TmpItem
+            $TmpListItem.Font = [MyConfig]::Font.Regular
+            $TmpListItem.SubItems.AddRange($TmpSubItems)
+            [Void]$PILItemListListView.Items.Add($TmpListItem)
+          }
+          $PILItemListListView.Columns[0].Width = -2
+          $PILItemListListView.EndUpdate()
+        }
+        
         $PILBtmStatusStrip.Items["Status"].Text = "Success Loading Sample PIL Configuration"
       }
       Else
@@ -17009,10 +17356,10 @@ For ($I = [MyRuntime]::MinColumns; $I -le [MyRuntime]::MaxColumns; $I++)
 {
   (New-MenuItem -Menu $SubDropDownMenu -Text ("{0:00} Total Columns" -f $I) -ToolTip "Set the Number of Item List Columns" -Name "TotalColumns" -Tag $I -DisplayStyle "ImageAndText" -TextImageRelation "ImageBeforeText" -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 }
-$SubDropDownMenu.DropDownItems[[MyRuntime]::StartColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
+$SubDropDownMenu.DropDownItems[[MyRuntime]::CurrentColumns - [MyRuntime]::MinColumns].ImageKey = "Selected16Icon"
 (New-MenuItem -Menu $DropDownMenu -Text "Set Column Names" -Name "ColumnNames" -Tag "ColumnNames" -DisplayStyle "ImageAndText" -ImageKey "Column16Icon" -TextImageRelation "ImageBeforeText" -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 
-(New-MenuItem -Menu $DropDownMenu -Text "Edit Configuration" -Name "ThreadScript" -Tag "ThreadScript" -DisplayStyle "ImageAndText" -ImageKey "Threads16Icon" -TextImageRelation "ImageBeforeText" -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $DropDownMenu -Text "Edit Configuration" -Name "ThreadConfig" -Tag "ThreadConfig" -DisplayStyle "ImageAndText" -ImageKey "Threads16Icon" -TextImageRelation "ImageBeforeText" -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 New-MenuSeparator -Menu $DropDownMenu
 (New-MenuItem -Menu $DropDownMenu -Text "Load Configuration" -Name "LoadConfig" -Tag "LoadConfig" -DisplayStyle "ImageAndText" -ImageKey "LoadConfig16Icon" -TextImageRelation "ImageBeforeText" -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 (New-MenuItem -Menu $DropDownMenu -Text "Save Configuration" -Name "SaveConfig" -Tag "SaveConfig" -DisplayStyle "ImageAndText" -ImageKey "SaveConfig16Icon" -TextImageRelation "ImageBeforeText" -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})

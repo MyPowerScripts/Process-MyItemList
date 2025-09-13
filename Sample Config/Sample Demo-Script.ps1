@@ -50,11 +50,11 @@ If ($ListViewItem.SubItems[1].Text -eq "Completed")
 #
 # You can add Multiple Checks for Pasue if Needed
 # ----------------------------------------------------
-If ($SyncedHash.Paused)
+If ($SyncedHash.Pause)
 {
   # Set Paused Status
   $ListViewItem.SubItems[1].Text = "Pause"
-  While ($SyncedHash.Paused)
+  While ($SyncedHash.Pause)
   {
     [System.Threading.Thread]::Sleep(100)
   }
