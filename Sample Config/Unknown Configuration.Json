@@ -1,0 +1,21 @@
+{
+  "ColumnNames": [
+    "Column Name 00",
+    "Column Name 01",
+    "Column Name 02",
+    "Column Name 03",
+    "Column Name 04",
+    "Column Name 05",
+    "Column Name 06",
+    "Column Name 07",
+    "Column Name 08",
+    "Column Name 09",
+    "Column Name 10",
+    "Column Name 11"
+  ],
+  "Modules": {},
+  "Functions": {},
+  "Variables": {},
+  "ThreadCount": 8,
+  "ThreadScript": ""
+}

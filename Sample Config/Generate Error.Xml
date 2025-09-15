@@ -1,0 +1,95 @@
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04">
+  <Obj RefId="0">
+    <TN RefId="0">
+      <T>PILThreadConfig</T>
+      <T>System.Object</T>
+    </TN>
+    <ToString>PILThreadConfig</ToString>
+    <Props>
+      <Obj N="XColumnNames" RefId="1">
+        <TN RefId="1">
+          <T>System.Collections.ArrayList</T>
+          <T>System.Object</T>
+        </TN>
+        <LST>
+          <S>List Item</S>
+          <S>Status</S>
+          <S>Term/Proc Times</S>
+          <S>Prompt Variable</S>
+          <S>Open Mutex</S>
+          <S>Synced Hash</S>
+          <S>Fake Error</S>
+          <S>Function Test</S>
+          <S>Static Variable</S>
+          <S>WasSuccess</S>
+          <S>Update Time 01</S>
+          <S>Update Time 02</S>
+          <S>Update Time 03</S>
+          <S>Update Time 04</S>
+          <S>Update Time 05</S>
+          <S>Update Time 06</S>
+        </LST>
+      </Obj>
+      <Obj N="XModules" RefId="2">
+        <TN RefId="2">
+          <T>System.Collections.Specialized.OrderedDictionary</T>
+          <T>System.Object</T>
+        </TN>
+        <DCT />
+      </Obj>
+      <Obj N="XFunctions" RefId="3">
+        <TN RefId="3">
+          <T>System.Collections.Hashtable</T>
+          <T>System.Object</T>
+        </TN>
+        <DCT>
+          <En>
+            <S N="Key">Example-Function</S>
+            <Obj N="Value" RefId="4">
+              <TN RefId="4">
+                <T>Selected.PILFunction</T>
+                <T>System.Management.Automation.PSCustomObject</T>
+                <T>System.Object</T>
+              </TN>
+              <MS>
+                <S N="Name">Example-Function</S>
+                <S N="ScriptBlock">_x000D__x000A_  &lt;#_x000D__x000A_    .SYNOPSIS_x000D__x000A_      Example Funciton_x000D__x000A_    .DESCRIPTION_x000D__x000A_      Example Funciton_x000D__x000A_    .PARAMETER InputValue_x000D__x000A_      Required Input Value_x000D__x000A_    .EXAMPLE_x000D__x000A_      Example-Function -InputValue $InputValue_x000D__x000A_    .NOTES_x000D__x000A_      Original Function By Ken Sweet_x000D__x000A_  #&gt;_x000D__x000A_  [CmdletBinding()]_x000D__x000A_  Param (_x000D__x000A_    [Parameter(Mandatory = $true)]_x000D__x000A_    [String]$InputValue_x000D__x000A_  )_x000D__x000A_  Write-Verbose -Message "Enter Function $($MyInvocation.MyCommand)"_x000D__x000A_  _x000D__x000A_  Return $InputValue_x000D__x000A_  _x000D__x000A_  Write-Verbose -Message "Exit Function $($MyInvocation.MyCommand)"_x000D__x000A_</S>
+              </MS>
+            </Obj>
+          </En>
+        </DCT>
+      </Obj>
+      <Obj N="XVariables" RefId="5">
+        <TNRef RefId="3" />
+        <DCT>
+          <En>
+            <S N="Key">PromptVariable</S>
+            <Obj N="Value" RefId="6">
+              <TN RefId="5">
+                <T>Selected.PILVariable</T>
+                <T>System.Management.Automation.PSCustomObject</T>
+                <T>System.Object</T>
+              </TN>
+              <MS>
+                <S N="Name">PromptVariable</S>
+                <S N="Value">*</S>
+              </MS>
+            </Obj>
+          </En>
+          <En>
+            <S N="Key">StaticVariable</S>
+            <Obj N="Value" RefId="7">
+              <TNRef RefId="5" />
+              <MS>
+                <S N="Name">StaticVariable</S>
+                <S N="Value">Static</S>
+              </MS>
+            </Obj>
+          </En>
+        </DCT>
+      </Obj>
+      <U16 N="XThreadCount">4</U16>
+      <S N="XThreadScript">&lt;#_x000D__x000A_  .SYNOPSIS_x000D__x000A_    Sample Runspace Pool Thread Script_x000D__x000A_  .DESCRIPTION_x000D__x000A_    Sample Runspace Pool Thread Script_x000D__x000A_  .PARAMETER ListViewItem_x000D__x000A_    ListViewItem Passed to the Thread Script_x000D__x000A__x000D__x000A_    This Paramter is Required in your Thread Script_x000D__x000A_  .EXAMPLE_x000D__x000A_    Test-Script.ps$Columns["Status"] -ListViewItem $ListViewItem_x000D__x000A_  .NOTES_x000D__x000A_    Sample Thread Script_x000D__x000A__x000D__x000A_   -------------------------_x000D__x000A_   ListViewItem Status Icons_x000D__x000A_   -------------------------_x000D__x000A_   $GoodIcon = Solid Green Circle_x000D__x000A_   $BadIcon = Solid Red Circle_x000D__x000A_   $InfoIcon = Solid Blue Circle_x000D__x000A_   $CheckIcon = Checkmark_x000D__x000A_   $ErrorIcon = Red X_x000D__x000A_   $UpIcon = Green up Arrow _x000D__x000A_   $DownIcon = Red Down Arrow_x000D__x000A__x000D__x000A_#&gt;_x000D__x000A_[CmdletBinding(DefaultParameterSetName = "ByValue")]_x000D__x000A_Param (_x000D__x000A_  [parameter(Mandatory = $True)]_x000D__x000A_  [System.Windows.Forms.ListViewItem]$ListViewItem_x000D__x000A_)_x000D__x000A__x000D__x000A_# Set Preference Variables_x000D__x000A_$ErrorActionPreference = "Stop"_x000D__x000A_$VerbosePreference = "SilentlyContinue"_x000D__x000A_$ProgressPreference = "SilentlyContinue"_x000D__x000A__x000D__x000A_# -----------------------------------------------------_x000D__x000A_# Build ListView Column Lookup Table_x000D__x000A_#_x000D__x000A_# Reference Columns by Name Incase Column Order Changes_x000D__x000A_# -----------------------------------------------------_x000D__x000A_$Columns = @{}_x000D__x000A_$ListViewItem.ListView.Columns | ForEach-Object -Process { $Columns.Add($PSItem.Text, $PSItem.Index) }_x000D__x000A__x000D__x000A_# ------------------------------------------------_x000D__x000A_# Check if Thread was Already Completed and Exit_x000D__x000A_#_x000D__x000A_# One Column needs to be the Status the the Thread_x000D__x000A_#  Status Messages are Customizable_x000D__x000A_# ------------------------------------------------_x000D__x000A_If ($ListViewItem.SubItems[$Columns["Status"]].Text -eq "Completed")_x000D__x000A_{_x000D__x000A_  $ListViewItem.ImageKey = $GoodIcon_x000D__x000A_  Exit_x000D__x000A_}_x000D__x000A__x000D__x000A_# ----------------------------------------------------_x000D__x000A_# Check if Threads are Paused and Update Thread Status_x000D__x000A_#_x000D__x000A_# You can add Multiple Checks for Pasue if Needed_x000D__x000A_# ----------------------------------------------------_x000D__x000A_If ($SyncedHash.Pause)_x000D__x000A_{_x000D__x000A_  # Set Paused Status_x000D__x000A_  $ListViewItem.SubItems[$Columns["Status"]].Text = "Pause"_x000D__x000A_  While ($SyncedHash.Pause)_x000D__x000A_  {_x000D__x000A_    [System.Threading.Thread]::Sleep(100)_x000D__x000A_  }_x000D__x000A_}_x000D__x000A__x000D__x000A_# -----------------------------------------------------_x000D__x000A_# Check For Termination and Update Thread Status_x000D__x000A_#_x000D__x000A_# You can add Multiple Checks for Termination if Needed_x000D__x000A_# -----------------------------------------------------_x000D__x000A_If ($SyncedHash.Terminate)_x000D__x000A_{_x000D__x000A_  # Set Terminated Status and Return_x000D__x000A_  $ListViewItem.SubItems[$Columns["Status"]].Text = "Terminated"_x000D__x000A_  $ListViewItem.SubItems[$Columns["Term/Proc Times"]].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")_x000D__x000A_  $ListViewItem.ImageKey = $InfoIcon_x000D__x000A_  Exit_x000D__x000A_}_x000D__x000A__x000D__x000A_# Set Proccessing Ststus_x000D__x000A_$ListViewItem.SubItems[$Columns["Status"]].Text = "Processing"_x000D__x000A_$ListViewItem.SubItems[$Columns["Term/Proc Times"]].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")_x000D__x000A_$WasSuccess = $True_x000D__x000A__x000D__x000A_# Set Prompt Variable_x000D__x000A_$ListViewItem.SubItems[$Columns["Prompt Variable"]].Text = $PromptVariable_x000D__x000A__x000D__x000A_# --------------------------------------------------_x000D__x000A_# Get Curent List Item_x000D__x000A_#_x000D__x000A_# Coulmn 0 Always has the List Item to be Proccessed_x000D__x000A_# --------------------------------------------------_x000D__x000A_$CurentItem = $ListViewItem.SubItems[$Columns["List Item"]].Text_x000D__x000A_# For Testing you can Write to the Screen_x000D__x000A_Write-Host -Object "Processing $($CurentItem)"_x000D__x000A__x000D__x000A_# --------------------------------------------------------------_x000D__x000A_# Open and wait for Mutex_x000D__x000A_# _x000D__x000A_# This is to Pause the Thread Script if Access a Shared Resource_x000D__x000A_#   and you need toi Limit to $Columns["Status"] Thread at a Time_x000D__x000A_#_x000D__x000A_# Using a Mutext is Optional_x000D__x000A_# --------------------------------------------------------------_x000D__x000A_$MyMutex = [System.Threading.Mutex]::OpenExisting($Mutex)_x000D__x000A_[Void]($MyMutex.WaitOne())_x000D__x000A__x000D__x000A_# Set Date / Time when Mutext was Opened_x000D__x000A_$ListViewItem.SubItems[$Columns["Open Mutex"]].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")_x000D__x000A__x000D__x000A_# Access / Update Shared Resources_x000D__x000A_# $CurrentItem | Out-File -Encoding ascii -FilePath "C:\SharedFile.txt"_x000D__x000A__x000D__x000A_# Release Mutex_x000D__x000A_$MyMutex.ReleaseMutex()_x000D__x000A__x000D__x000A_# --------------------------------------------------------------------------------_x000D__x000A_# The Synced HashTable has an Object Property to share information between Threads_x000D__x000A_# --------------------------------------------------------------------------------_x000D__x000A_If ([String]::IsNullOrEmpty($SyncedHash.Object))_x000D__x000A_{_x000D__x000A_  $SyncedHash.Object = "First"_x000D__x000A_}_x000D__x000A_$ListViewItem.SubItems[$Columns["Synced Hash"]].Text = $SyncedHash.Object_x000D__x000A_$SyncedHash.Object = $CurentItem_x000D__x000A__x000D__x000A__x000D__x000A_# Random Number Generator_x000D__x000A_$Random = [System.Random]::New()_x000D__x000A__x000D__x000A_# ---------------------------------------------------------_x000D__x000A_# Gernate a Fake Error_x000D__x000A_#_x000D__x000A_# Make sure to use Error Catching to make sure thread exits_x000D__x000A_# ---------------------------------------------------------_x000D__x000A_Try_x000D__x000A_{_x000D__x000A_  Switch ($Random.Next(0, 3))_x000D__x000A_  {_x000D__x000A_    "0"_x000D__x000A_    {_x000D__x000A_      Throw "This is a Fake Error!"_x000D__x000A_      Break_x000D__x000A_    }_x000D__x000A_    "1"_x000D__x000A_    {_x000D__x000A_      Throw "Simulated Error!"_x000D__x000A_      Break_x000D__x000A_    }_x000D__x000A_    "2"_x000D__x000A_    {_x000D__x000A_      Throw "Someing Failed!"_x000D__x000A_      Break_x000D__x000A_    }_x000D__x000A_    "3"_x000D__x000A_    {_x000D__x000A_      Throw "Unknown Error!"_x000D__x000A_      Break_x000D__x000A_    }_x000D__x000A_  }_x000D__x000A_}_x000D__x000A_Catch_x000D__x000A_{_x000D__x000A_  # Save Error Mesage_x000D__x000A_  $ListViewItem.SubItems[$Columns["Fake Error"]].Text = $Error[0].Exception.Message_x000D__x000A_}_x000D__x000A__x000D__x000A_$ListViewItem.SubItems[$Columns["Function Test"]].Text = Example-Function -InputValue "Hello World"_x000D__x000A_$ListViewItem.SubItems[$Columns["Static Variable"]].Text = $StaticVariable_x000D__x000A__x000D__x000A_$RndValue = $Random.Next(0, 3)_x000D__x000A_For ($I = 10; $I -lt 16; $I++)_x000D__x000A_{_x000D__x000A_  $ListViewItem.SubItems[$I].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")_x000D__x000A_  [System.Threading.Thread]::Sleep(100)_x000D__x000A_}_x000D__x000A__x000D__x000A_# Random Fail Simlater_x000D__x000A_If ($RndValue -eq 0)_x000D__x000A_{_x000D__x000A_  $WasSuccess = $False_x000D__x000A_}_x000D__x000A_$ListViewItem.SubItems[$Columns["WasSuccess"]].Text = $WasSuccess_x000D__x000A__x000D__x000A_# Set Final Date / Time and Update Status_x000D__x000A_$ListViewItem.SubItems[$Columns["Term/Proc Times"]].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")_x000D__x000A_If ($WasSuccess)_x000D__x000A_{_x000D__x000A_  # Return Success_x000D__x000A_  $ListViewItem.ImageKey = $GoodIcon_x000D__x000A_  $ListViewItem.SubItems[$Columns["Status"]].Text = "Completed"_x000D__x000A_}_x000D__x000A_Else_x000D__x000A_{_x000D__x000A_  # Return Success_x000D__x000A_  $ListViewItem.ImageKey = $BadIcon_x000D__x000A_  $ListViewItem.SubItems[$Columns["Status"]].Text = "Error"_x000D__x000A_}_x000D__x000A__x000D__x000A_# Testing Write to Screen_x000D__x000A_Write-Host -Object "Completed $($CurentItem)"_x000D__x000A__x000D__x000A_Exit_x000D__x000A__x000D__x000A__x000D__x000A_</S>
+    </Props>
+  </Obj>
+</Objs>

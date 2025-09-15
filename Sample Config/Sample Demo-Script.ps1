@@ -8,7 +8,7 @@
 
     This Paramter is Required in your Thread Script
   .EXAMPLE
-    Test-Script.ps1 -ListViewItem $ListViewItem
+    Test-Script.ps$Columns["Status"] -ListViewItem $ListViewItem
   .NOTES
     Sample Thread Script
 
@@ -30,8 +30,18 @@ Param (
   [System.Windows.Forms.ListViewItem]$ListViewItem
 )
 
+# Set Preference Variables
 $ErrorActionPreference = "Stop"
 $VerbosePreference = "SilentlyContinue"
+$ProgressPreference = "SilentlyContinue"
+
+# -----------------------------------------------------
+# Build ListView Column Lookup Table
+#
+# Reference Columns by Name Incase Column Order Changes
+# -----------------------------------------------------
+$Columns = @{}
+$ListViewItem.ListView.Columns | ForEach-Object -Process { $Columns.Add($PSItem.Text, $PSItem.Index) }
 
 # ------------------------------------------------
 # Check if Thread was Already Completed and Exit
@@ -39,7 +49,7 @@ $VerbosePreference = "SilentlyContinue"
 # One Column needs to be the Status the the Thread
 #  Status Messages are Customizable
 # ------------------------------------------------
-If ($ListViewItem.SubItems[1].Text -eq "Completed")
+If ($ListViewItem.SubItems[$Columns["Status"]].Text -eq "Completed")
 {
   $ListViewItem.ImageKey = $GoodIcon
   Exit
@@ -53,7 +63,7 @@ If ($ListViewItem.SubItems[1].Text -eq "Completed")
 If ($SyncedHash.Pause)
 {
   # Set Paused Status
-  $ListViewItem.SubItems[1].Text = "Pause"
+  $ListViewItem.SubItems[$Columns["Status"]].Text = "Pause"
   While ($SyncedHash.Pause)
   {
     [System.Threading.Thread]::Sleep(100)
@@ -68,29 +78,34 @@ If ($SyncedHash.Pause)
 If ($SyncedHash.Terminate)
 {
   # Set Terminated Status and Return
-  $ListViewItem.SubItems[1].Text = "Terminated"
-  $ListViewItem.SubItems[2].Text = [DateTime]::Now.ToString("g")
+  $ListViewItem.SubItems[$Columns["Status"]].Text = "Terminated"
+  $ListViewItem.SubItems[$Columns["Term/Proc Times"]].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")
   $ListViewItem.ImageKey = $InfoIcon
   Exit
 }
 
 # Set Proccessing Ststus
-$ListViewItem.SubItems[1].Text = "Processing"
-$ListViewItem.SubItems[2].Text = [DateTime]::Now.ToString("g")
+$ListViewItem.SubItems[$Columns["Status"]].Text = "Processing"
+$ListViewItem.SubItems[$Columns["Term/Proc Times"]].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")
 $WasSuccess = $True
+
+# Set Prompt Variable
+$ListViewItem.SubItems[$Columns["Prompt Variable"]].Text = $PromptVariable
 
 # --------------------------------------------------
 # Get Curent List Item
 #
 # Coulmn 0 Always has the List Item to be Proccessed
 # --------------------------------------------------
-$CurentItem = $ListViewItem.SubItems[0].Text
+$CurentItem = $ListViewItem.SubItems[$Columns["List Item"]].Text
+# For Testing you can Write to the Screen
+Write-Host -Object "Processing $($CurentItem)"
 
 # --------------------------------------------------------------
 # Open and wait for Mutex
 # 
 # This is to Pause the Thread Script if Access a Shared Resource
-#   and you need toi Limit to 1 Thread at a Time
+#   and you need toi Limit to $Columns["Status"] Thread at a Time
 #
 # Using a Mutext is Optional
 # --------------------------------------------------------------
@@ -98,7 +113,13 @@ $MyMutex = [System.Threading.Mutex]::OpenExisting($Mutex)
 [Void]($MyMutex.WaitOne())
 
 # Set Date / Time when Mutext was Opened
-$ListViewItem.SubItems[3].Text = [DateTime]::Now.ToString("g")
+$ListViewItem.SubItems[$Columns["Open Mutex"]].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")
+
+# Access / Update Shared Resources
+# $CurrentItem | Out-File -Encoding ascii -FilePath "C:\SharedFile.txt"
+
+# Release Mutex
+$MyMutex.ReleaseMutex()
 
 # --------------------------------------------------------------------------------
 # The Synced HashTable has an Object Property to share information between Threads
@@ -107,11 +128,9 @@ If ([String]::IsNullOrEmpty($SyncedHash.Object))
 {
   $SyncedHash.Object = "First"
 }
-$ListViewItem.SubItems[4].Text = $SyncedHash.Object
+$ListViewItem.SubItems[$Columns["Synced Hash"]].Text = $SyncedHash.Object
 $SyncedHash.Object = $CurentItem
 
-# Release Mutex
-$MyMutex.ReleaseMutex()
 
 # Random Number Generator
 $Random = [System.Random]::New()
@@ -150,36 +169,42 @@ Try
 Catch
 {
   # Save Error Mesage
-  $ListViewItem.SubItems[5].Text = $Error[0].Exception.Message
+  $ListViewItem.SubItems[$Columns["Fake Error"]].Text = $Error[0].Exception.Message
 }
 
+$ListViewItem.SubItems[$Columns["Function Test"]].Text = Example-Function -InputValue "Hello World"
+$ListViewItem.SubItems[$Columns["Static Variable"]].Text = $StaticVariable
 
-For ($I = 8; $I -lt 16; $I++)
+$RndValue = $Random.Next(0, 3)
+For ($I = 10; $I -lt 16; $I++)
 {
   $ListViewItem.SubItems[$I].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")
   [System.Threading.Thread]::Sleep(100)
 }
 
-$RndValue = $Random.Next(0, 3)
-$ListViewItem.SubItems[6].Text = $RndValue
 # Random Fail Simlater
 If ($RndValue -eq 0)
 {
   $WasSuccess = $False
 }
-$ListViewItem.SubItems[7].Text = $WasSuccess
+$ListViewItem.SubItems[$Columns["WasSuccess"]].Text = $WasSuccess
 
+# Set Final Date / Time and Update Status
+$ListViewItem.SubItems[$Columns["Term/Proc Times"]].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")
 If ($WasSuccess)
 {
   # Return Success
   $ListViewItem.ImageKey = $GoodIcon
-  $ListViewItem.SubItems[1].Text = "Completed"
+  $ListViewItem.SubItems[$Columns["Status"]].Text = "Completed"
 }
 Else
 {
   # Return Success
   $ListViewItem.ImageKey = $BadIcon
-  $ListViewItem.SubItems[1].Text = "Error"
+  $ListViewItem.SubItems[$Columns["Status"]].Text = "Error"
 }
+
+# Testing Write to Screen
+Write-Host -Object "Completed $($CurentItem)"
 
 Exit

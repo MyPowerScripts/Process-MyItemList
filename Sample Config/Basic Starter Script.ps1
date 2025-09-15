@@ -30,20 +30,23 @@ Param (
   [System.Windows.Forms.ListViewItem]$ListViewItem
 )
 
+# Set Preference Variables
 $ErrorActionPreference = "Stop"
 $VerbosePreference = "SilentlyContinue"
+$ProgressPreference = "SilentlyContinue"
 
-# Common Columns
-$ItemCol = 0
-$DataCol = 1
-$StatusCol = 2
-$DateTimeCol = 3
-$ErrorCol = 4
+# -----------------------------------------------------
+# Build ListView Column Lookup Table
+#
+# Reference Columns by Name Incase Column Order Changes
+# -----------------------------------------------------
+$Columns = @{}
+$ListViewItem.ListView.Columns | ForEach-Object -Process { $Columns.Add($PSItem.Text, $PSItem.Index) }
 
 # ------------------------------------------------
 # Check if Thread was Already Completed and Exit
 # ------------------------------------------------
-If ($ListViewItem.SubItems[$StatusCol].Text -eq "Completed")
+If ($ListViewItem.SubItems[$Columns["Job Status"]].Text -eq "Completed")
 {
   $ListViewItem.ImageKey = $GoodIcon
   Exit
@@ -55,7 +58,7 @@ If ($ListViewItem.SubItems[$StatusCol].Text -eq "Completed")
 If ($SyncedHash.Pause)
 {
   # Set Paused Status
-  $ListViewItem.SubItems[1].Text = "Pause"
+  $ListViewItem.SubItems[$Columns["Job Status"]].Text = "Pause"
   While ($SyncedHash.Pause)
   {
     [System.Threading.Thread]::Sleep(100)
@@ -68,15 +71,17 @@ If ($SyncedHash.Pause)
 If ($SyncedHash.Terminate)
 {
   # Set Terminated Status and Exit Thread
-  $ListViewItem.SubItems[$StatusCol].Text = "Terminated"
-  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString("G")
+  $ListViewItem.SubItems[$Columns["Job Status"]].Text = "Terminated"
+  $ListViewItem.SubItems[$Columns["Date/Time"]].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")
   $ListViewItem.ImageKey = $InfoIcon
   Exit
 }
 
 # Sucess Default Exit Status
 $WasSuccess = $True
-$CurrentItem = $ListViewItem.SubItems[$ItemCol].Text
+$ListViewItem.SubItems[$Columns["Job Status"]].Text = "Processing"
+$CurrentItem = $ListViewItem.SubItems[$Columns["List Item"]].Text
+
 Try
 {
   
@@ -85,7 +90,7 @@ Try
   {
     $SyncedHash.Object = "First Item"
   }
-  $ListViewItem.SubItems[$DataCol].Text = $SyncedHash.Object
+  $ListViewItem.SubItems[$Columns["Data Column"]].Text = $SyncedHash.Object
   $SyncedHash.Object = $CurrentItem
   
   # ---------------------------------------------------------
@@ -99,30 +104,34 @@ Try
   
   # Release Mutex
   $MyMutex.ReleaseMutex()
-  
 }
 Catch
 {
   # Set Error Message / Thread Failed
-  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.ToString()
+  $ListViewItem.SubItems[$Columns["Error Message"]].Text = $PSItem.ToString()
   $WasSuccess = $False
 }
 
+# File Remaining Columns
+For ($I = 4; $I -lt 11; $I++)
+{
+  $ListViewItem.SubItems[$I].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")
+  [System.Threading.Thread]::Sleep(100)
+}
+
 # Set Final Date / Time and Update Status
-$ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString("G")
+$ListViewItem.SubItems[$Columns["Date/Time"]].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")
 If ($WasSuccess)
 {
   # Return Success
   $ListViewItem.ImageKey = $GoodIcon
-  $ListViewItem.SubItems[$StatusCol].Text = "Completed"
+  $ListViewItem.SubItems[$Columns["Job Status"]].Text = "Completed"
 }
 Else
 {
   # Return Success
   $ListViewItem.ImageKey = $BadIcon
-  $ListViewItem.SubItems[$StatusCol].Text = "Error"
+  $ListViewItem.SubItems[$Columns["Job Status"]].Text = "Error"
 }
-
-Write-Host -Object $ListViewItem.ImageKey
 
 Exit

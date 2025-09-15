@@ -30,8 +30,18 @@ Param (
   [System.Windows.Forms.ListViewItem]$ListViewItem
 )
 
+# Set Preference Variables
 $ErrorActionPreference = "Stop"
 $VerbosePreference = "SilentlyContinue"
+$ProgressPreference = "SilentlyContinue"
+
+# -----------------------------------------------------
+# Build ListView Column Lookup Table
+#
+# Reference Columns by Name Incase Column Order Changes
+# -----------------------------------------------------
+$Columns = @{}
+$ListViewItem.ListView.Columns | ForEach-Object -Process { $Columns.Add($PSItem.Text, $PSItem.Index) }
 
 #region class MyWorkstationInfo
 Class MyWorkstationInfo
@@ -128,10 +138,12 @@ Class MyWorkstationInfo
 }
 #endregion class MyWorkstationInfo
 
-# Common Columns
-$StatusCol = 17
-$DateTimeCol = 18
-$ErrorCol = 19
+# Build ListView Column Lookup Table
+#
+# Reference Columns by Name Incase Column Order Changes
+# -----------------------------------------------------
+$Columns = @{}
+$ListViewItem.ListView.Columns | ForEach-Object -Process { $Columns.Add($PSItem.Text, $PSItem.Index) }
 
 # ------------------------------------------------
 # Check if Thread was Already Completed and Exit
@@ -139,7 +151,7 @@ $ErrorCol = 19
 # One Column needs to be the Status the the Thread
 #  Status Messages are Customizable
 # ------------------------------------------------
-If ($ListViewItem.SubItems[$StatusCol].Text -eq "Completed")
+If ($ListViewItem.SubItems[$Columns["Job Status"]].Text -eq "Completed")
 {
   $ListViewItem.ImageKey = $GoodIcon
   Exit
@@ -153,8 +165,8 @@ If ($ListViewItem.SubItems[$StatusCol].Text -eq "Completed")
 If ($SyncedHash.Pause)
 {
   # Set Paused Status
-  $ListViewItem.SubItems[$StatusCol].Text = "Pause"
-  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString("g")
+  $ListViewItem.SubItems[$Columns["Job Status"]].Text = "Pause"
+  $ListViewItem.SubItems[$Columns["Date / Time"]].Text = [DateTime]::Now.ToString("g")
   While ($SyncedHash.Pause)
   {
     [System.Threading.Thread]::Sleep(100)
@@ -169,8 +181,8 @@ If ($SyncedHash.Pause)
 If ($SyncedHash.Terminate)
 {
   # Set Terminated Status and Return
-  $ListViewItem.SubItems[$StatusCol].Text = "Terminated"
-  $ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString("g")
+  $ListViewItem.SubItems[$Columns["Job Status"]].Text = "Terminated"
+  $ListViewItem.SubItems[$Columns["Date / Time"]].Text = [DateTime]::Now.ToString("g")
   $ListViewItem.ImageKey = $InfoIcon
   Exit
 }
@@ -181,62 +193,61 @@ If ($SyncedHash.Terminate)
 $ComputerName = $ListViewItem.SubItems[0].Text
 
 # Set Proccessing Ststus
-$ListViewItem.SubItems[$StatusCol].Text = "Processing"
-$ListViewItem.SubItems[$DateTimeCol].Text = [DateTime]::Now.ToString("g")
+$ListViewItem.SubItems[$Columns["Job Status"]].Text = "Processing"
+$ListViewItem.SubItems[$Columns["Date / Time"]].Text = [DateTime]::Now.ToString("g")
 
 Try
 {
   $WorkstationInfo = Get-MyWorkstationInfo -ComputerName $ComputerName -Serial -Mobile
   $WasSuccess = $WorkstationInfo.Found
   
-  $ListViewItem.SubItems[01].Text = $WorkstationInfo.Status
-  $ListViewItem.SubItems[02].Text = $WorkstationInfo.IPAddress
-  $ListViewItem.SubItems[03].Text = $WorkstationInfo.FQDN
-  $ListViewItem.SubItems[04].Text = $WorkstationInfo.Domain
-  $ListViewItem.SubItems[05].Text = $WorkstationInfo.ComputerName
-  $ListViewItem.SubItems[06].Text = $WorkstationInfo.UserName
-  $ListViewItem.SubItems[07].Text = $WorkstationInfo.OperatingSystem
-  $ListViewItem.SubItems[08].Text = $WorkstationInfo.BuildNumber
-  $ListViewItem.SubItems[09].Text = $WorkstationInfo.Architecture
-  $ListViewItem.SubItems[10].Text = $WorkstationInfo.SerialNumber
-  $ListViewItem.SubItems[11].Text = $WorkstationInfo.Manufacturer
-  $ListViewItem.SubItems[12].Text = $WorkstationInfo.Model
-  $ListViewItem.SubItems[13].Text = $WorkstationInfo.IsMobile
-  $ListViewItem.SubItems[14].Text = $WorkstationInfo.Memory
-  $ListViewItem.SubItems[15].Text = $WorkstationInfo.InstallDate
-  $ListViewItem.SubItems[16].Text = $WorkstationInfo.LastBootUpTime
+  $ListViewItem.SubItems[$Columns["On-Line"]].Text = $WorkstationInfo.Status
+  $ListViewItem.SubItems[$Columns["IP Address"]].Text = $WorkstationInfo.IPAddress
+  $ListViewItem.SubItems[$Columns["FQDN"]].Text = $WorkstationInfo.FQDN
+  $ListViewItem.SubItems[$Columns["Domain"]].Text = $WorkstationInfo.Domain
+  $ListViewItem.SubItems[$Columns["Computer Name"]].Text = $WorkstationInfo.ComputerName
+  $ListViewItem.SubItems[$Columns["User Name"]].Text = $WorkstationInfo.UserName
+  $ListViewItem.SubItems[$Columns["Operating System"]].Text = $WorkstationInfo.OperatingSystem
+  $ListViewItem.SubItems[$Columns["Build Number"]].Text = $WorkstationInfo.BuildNumber
+  $ListViewItem.SubItems[$Columns["Architecture"]].Text = $WorkstationInfo.Architecture
+  $ListViewItem.SubItems[$Columns["Serial Number"]].Text = $WorkstationInfo.SerialNumber
+  $ListViewItem.SubItems[$Columns["Manufacturer"]].Text = $WorkstationInfo.Manufacturer
+  $ListViewItem.SubItems[$Columns["Model"]].Text = $WorkstationInfo.Model
+  $ListViewItem.SubItems[$Columns["IsMobile"]].Text = $WorkstationInfo.IsMobile
+  $ListViewItem.SubItems[$Columns["Memory"]].Text = $WorkstationInfo.Memory
+  $ListViewItem.SubItems[$Columns["Install Date"]].Text = $WorkstationInfo.InstallDate
+  $ListViewItem.SubItems[$Columns["Last Reboot"]].Text = $WorkstationInfo.LastBootUpTime
   
 }
 Catch [System.Management.Automation.RuntimeException]
 {
   $WasSuccess = $False
-  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.Message
+  $ListViewItem.SubItems[$Columns[$Columns["Error Message"]]].Text = $PSItem.Message
 }
 Catch [System.Management.Automation.ErrorRecord]
 {
   $WasSuccess = $False
-  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.Exception.Message
+  $ListViewItem.SubItems[$Columns[$Columns["Error Message"]]].Text = $PSItem.Exception.Message
 }
 Catch
 {
   $WasSuccess = $False
-  $ListViewItem.SubItems[$ErrorCol].Text = $PSItem.ToString()
+  $ListViewItem.SubItems[$Columns["Error Message"]].Text = $PSItem.ToString()
 }
 
-
+# Set Final Date / Time and Update Status
+$ListViewItem.SubItems[$Columns["Date / Time"]].Text = [DateTime]::Now.ToString("g")
 If ($WasSuccess)
 {
   # Return Success
   $ListViewItem.ImageKey = $GoodIcon
-  $ListViewItem.SubItems[$StatusCol].Text = "Completed"
+  $ListViewItem.SubItems[$Columns["Job Status"]].Text = "Completed"
 }
 Else
 {
   # Return Success
   $ListViewItem.ImageKey = $BadIcon
-  $ListViewItem.SubItems[$StatusCol].Text = "Error"
+  $ListViewItem.SubItems[$Columns["Job Status"]].Text = "Error"
 }
-
-Write-Host -Object $ListViewItem.ImageKey
 
 Exit
