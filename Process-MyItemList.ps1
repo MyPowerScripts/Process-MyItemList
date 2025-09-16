@@ -4,7 +4,10 @@
 <#
 Change Log for PIL
 ------------------------------------------------------------------------------------------------
-2.0.0.1s - Initial Version
+2.0.0.2 - Add Copy All Functions in Thread Config Dialog
+          Add Double Click Variable to Edit in Thread Config Dialog
+------------------------------------------------------------------------------------------------
+2.0.0.1 - Initial Version
 ------------------------------------------------------------------------------------------------
 #>
 
@@ -150,7 +153,7 @@ Class MyConfig
   static [bool]$Production = $True
 
   static [String]$ScriptName = "Process-MyItemList"
-  static [Version]$ScriptVersion = [Version]::New("2.0.0.1")
+  static [Version]$ScriptVersion = [Version]::New("2.0.0.2")
   static [String]$ScriptAuthor = "Ken Sweet"
 
   # Script Configuration
@@ -10098,6 +10101,7 @@ function Update-ThreadConfiguration ()
         $PILTCFunctionsContextMenuStrip.Items["Remove"].Enabled = $False
         $PILTCFunctionsContextMenuStrip.Items["Copy"].Enabled = $False
       }
+      $PILTCFunctionsContextMenuStrip.Items["CopyAll"].Enabled = ($Sender.Items.Count -gt 0)
       $PILTCFunctionsContextMenuStrip.Items["Clear"].Enabled = ($Sender.Items.Count -gt 0)
       $PILTCFunctionsContextMenuStrip.Show($Sender, $EventArg.Location)
     }
@@ -10272,6 +10276,21 @@ function Update-ThreadConfiguration ()
         [System.Windows.Forms.Clipboard]::SetText($StringBuilder.ToString())
         Break
       }
+      "CopyAll"
+      {
+        $StringBuilder = [System.Text.StringBuilder]::New()
+        ForEach ($Item In $PILTCFunctionsListBox.Items)
+        {
+          [Void]$StringBuilder.AppendLine("#region **** Function $($Item.Name) ****")
+          [Void]$StringBuilder.AppendLine("function $($Item.Name) ()")
+          [Void]$StringBuilder.Append("{")
+          [Void]$StringBuilder.Append(($Item.ScriptBlock.ToString()))
+          [Void]$StringBuilder.AppendLine("}")
+          [Void]$StringBuilder.AppendLine("#endregion **** Function $($Item.Name) ****`r`n")
+        }
+        [System.Windows.Forms.Clipboard]::SetText($StringBuilder.ToString())
+        Break
+      }
       "Clear"
       {
         $PILTCFunctionsListBox.Items.Clear()
@@ -10288,6 +10307,7 @@ function Update-ThreadConfiguration ()
   (New-MenuItem -Menu $PILTCFunctionsContextMenuStrip -Text "Remove Function" -Name "Remove" -Tag "Remove" -DisplayStyle "ImageAndText" -ImageKey "Delete16Icon" -PassThru).add_Click({Start-PILTCFunctionsContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   New-MenuSeparator -Menu $PILTCFunctionsContextMenuStrip
   (New-MenuItem -Menu $PILTCFunctionsContextMenuStrip -Text "Copy Function" -Name "Copy" -Tag "Copy" -DisplayStyle "ImageAndText" -ImageKey "Copy16Icon" -PassThru).add_Click({Start-PILTCFunctionsContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+  (New-MenuItem -Menu $PILTCFunctionsContextMenuStrip -Text "Copy All Functions" -Name "CopyAll" -Tag "CopyAll" -DisplayStyle "ImageAndText" -ImageKey "Copy16Icon" -PassThru).add_Click({Start-PILTCFunctionsContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   New-MenuSeparator -Menu $PILTCFunctionsContextMenuStrip
   (New-MenuItem -Menu $PILTCFunctionsContextMenuStrip -Text "Delete All" -Name "Clear" -Tag "Clear" -DisplayStyle "ImageAndText" -ImageKey "Trash16Icon" -PassThru).add_Click({ Start-PILTCFunctionsContextMenuStripItemClick -Sender $This -EventArg $PSItem})
 
@@ -10331,7 +10351,53 @@ function Update-ThreadConfiguration ()
   #$PILTCVariablesListBox.Tag = [System.Object]::New()
   $PILTCVariablesListBox.ValueMember = "Value"
   #endregion $PILTCVariablesListBox = [System.Windows.Forms.ListBox]::New()
-   
+  
+  #region ******** Function Start-PILTCVariablesListBoxDoubleClick ********
+  function Start-PILTCVariablesListBoxDoubleClick
+  {
+    <#
+      .SYNOPSIS
+        DoubleClick Event for the PILTCVariables ListBox Control
+      .DESCRIPTION
+        DoubleClick Event for the PILTCVariables ListBox Control
+      .PARAMETER Sender
+         The TCVariables Control that fired the DoubleClick Event
+      .PARAMETER EventArg
+         The Event Arguments for the TCVariables DoubleClick Event
+      .EXAMPLE
+         Start-PILTCVariablesListBoxDoubleClick -Sender $Sender -EventArg $EventArg
+      .NOTES
+        Original Function By kensw
+    #>
+    [CmdletBinding()]
+    param (
+      [parameter(Mandatory = $True)]
+      [System.Windows.Forms.ListBox]$Sender,
+      [parameter(Mandatory = $True)]
+      [Object]$EventArg
+    )
+    Write-Verbose -Message "Enter DoubleClick Event for $($MyInvocation.MyCommand)"
+
+    [MyConfig]::AutoExit = 0
+    
+    $TempIndex = $Sender.IndexFromPoint($EventArg.location)
+    If ($TempIndex -gt -1)
+    {
+      $Sender.SelectedIndex = $TempIndex
+      $OrderedItems = [Ordered]@{ "Variable Name" = $PILTCVariablesListBox.SelectedItem.Name; "Variable Value" = $PILTCVariablesListBox.SelectedItem.Value }
+      $DialogResult = Get-MultiTextBoxInput -Title "Edit Variable" -Message "Update Common Variable Name and Value" -OrderedItems $OrderedItems -AllRequired -ValidChars "."
+      If ($DialogResult.Success)
+      {
+        $PILTCVariablesListBox.Items.RemoveAt($PILTCVariablesListBox.SelectedIndex)
+        [Void]$PILTCVariablesListBox.Items.Add([PILVariable]::New($DialogResult.OrderedItems["Variable Name"], $DialogResult.OrderedItems["Variable Value"]))
+      }
+    }
+    
+    Write-Verbose -Message "Exit DoubleClick Event for $($MyInvocation.MyCommand)"
+  }
+  #endregion ******** Function Start-PILTCVariablesListBoxDoubleClick ********
+  $PILTCVariablesListBox.add_DoubleClick({Start-PILTCVariablesListBoxDoubleClick -Sender $This -EventArg $PSItem})
+
   #region ******** Function Start-PILTCVariablesListBoxMouseDown ********
   function Start-PILTCVariablesListBoxMouseDown
   {
