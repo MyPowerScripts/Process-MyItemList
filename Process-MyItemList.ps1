@@ -10238,17 +10238,21 @@ function Update-ThreadConfiguration ()
         If ($Response -eq [System.Windows.Forms.DialogResult]::OK)
         {
           $TmpFunctions = Get-Content -Path $PILOpenFileDialog.FileName -Raw
-          $AST = [System.Management.Automation.Language.Parser]::ParseInput($TmpFunctions, [ref]$Null, [ref]$Null)
-          $Functions = @($AST.FindAll({ Param ($Node) (($Node -is [System.Management.Automation.Language.FunctionDefinitionAst]) -and (-not ($node.Parent -is [System.Management.Automation.Language.FunctionMemberAst]))) }, $True))
-          If ($Functions.Count -gt 0)
+          If ($TmpFunctions.Length -gt 0)
           {
-            ForEach ($Function In $Functions)
+            $AST = [System.Management.Automation.Language.Parser]::ParseInput($TmpFunctions, [ref]$Null, [ref]$Null)
+            $Functions = @($AST.FindAll({ Param ($Node) (($Node -is [System.Management.Automation.Language.FunctionDefinitionAst]) -and (-not ($node.Parent -is [System.Management.Automation.Language.FunctionMemberAst]))) }, $True))
+            If ($Functions.Count -gt 0)
             {
-              [Void]$PILTCFunctionsListBox.Items.Add([PILFunction]::New($Function.Name, $Function.Body.GetScriptBlock()))
+              ForEach ($Function In $Functions)
+              {
+                [Void]$PILTCFunctionsListBox.Items.Add([PILFunction]::New($Function.Name, $Function.Body.GetScriptBlock()))
+              }
             }
+            # Save File Path
+            $PILOpenFileDialog.InitialDirectory = [System.IO.Path]::GetDirectoryName($PILOpenFileDialog.FileName)
           }
-          # Save File Path
-          $PILOpenFileDialog.InitialDirectory = [System.IO.Path]::GetDirectoryName($PILOpenFileDialog.FileName)
+          
         }
         Break
       }
