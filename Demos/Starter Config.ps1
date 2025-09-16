@@ -40,13 +40,13 @@ $ProgressPreference = "SilentlyContinue"
 #
 # Reference Columns by Name Incase Column Order Changes
 # -----------------------------------------------------
-$Columns = @{}
+$Columns = @{ }
 $ListViewItem.ListView.Columns | ForEach-Object -Process { $Columns.Add($PSItem.Text, $PSItem.Index) }
 
 # ------------------------------------------------
 # Check if Thread was Already Completed and Exit
 # ------------------------------------------------
-If ($ListViewItem.SubItems[$Columns["Job Status"]].Text -eq "Completed")
+If ($ListViewItem.SubItems[$Columns["Status Message"]].Text -eq "Completed")
 {
   $ListViewItem.ImageKey = $GoodIcon
   Exit
@@ -58,7 +58,8 @@ If ($ListViewItem.SubItems[$Columns["Job Status"]].Text -eq "Completed")
 If ($SyncedHash.Pause)
 {
   # Set Paused Status
-  $ListViewItem.SubItems[$Columns["Job Status"]].Text = "Pause"
+  $ListViewItem.SubItems[$Columns["Status Message"]].Text = "Pause"
+  $ListViewItem.SubItems[$Columns["Date/Time"]].Text = [DateTime]::Now.ToString("G")
   While ($SyncedHash.Pause)
   {
     [System.Threading.Thread]::Sleep(100)
@@ -71,20 +72,19 @@ If ($SyncedHash.Pause)
 If ($SyncedHash.Terminate)
 {
   # Set Terminated Status and Exit Thread
-  $ListViewItem.SubItems[$Columns["Job Status"]].Text = "Terminated"
-  $ListViewItem.SubItems[$Columns["Date/Time"]].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")
+  $ListViewItem.SubItems[$Columns["Status Message"]].Text = "Terminated"
+  $ListViewItem.SubItems[$Columns["Date/Time"]].Text = [DateTime]::Now.ToString("G")
   $ListViewItem.ImageKey = $InfoIcon
   Exit
 }
 
 # Sucess Default Exit Status
 $WasSuccess = $True
-$ListViewItem.SubItems[$Columns["Job Status"]].Text = "Processing"
+$ListViewItem.SubItems[$Columns["Status Message"]].Text = "Processing"
 $CurrentItem = $ListViewItem.SubItems[$Columns["List Item"]].Text
 
 Try
 {
-  
   # Get / Update Shared Object / Value
   If ([System.String]::IsNullOrEmpty($SyncedHash.Object))
   {
@@ -115,23 +115,29 @@ Catch
 # File Remaining Columns
 For ($I = 4; $I -lt 11; $I++)
 {
-  $ListViewItem.SubItems[$I].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")
+  $ListViewItem.SubItems[$I].Text = [DateTime]::Now.ToString("G")
   [System.Threading.Thread]::Sleep(100)
 }
 
 # Set Final Date / Time and Update Status
-$ListViewItem.SubItems[$Columns["Date/Time"]].Text = [DateTime]::Now.ToString("HH:mm:ss:ffff")
+$ListViewItem.SubItems[$Columns["Date/Time"]].Text = [DateTime]::Now.ToString("G")
 If ($WasSuccess)
 {
   # Return Success
   $ListViewItem.ImageKey = $GoodIcon
-  $ListViewItem.SubItems[$Columns["Job Status"]].Text = "Completed"
+  $ListViewItem.SubItems[$Columns["Status Message"]].Text = "Completed"
+  $ListViewItem.SubItems[$Columns["Error Message"]].Text = ""
 }
 Else
 {
   # Return Success
   $ListViewItem.ImageKey = $BadIcon
-  $ListViewItem.SubItems[$Columns["Job Status"]].Text = "Error"
+  $ListViewItem.SubItems[$Columns["Status Message"]].Text = "Error"
 }
 
 Exit
+
+
+
+
+
