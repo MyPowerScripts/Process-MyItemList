@@ -147,7 +147,7 @@ Class Font
 Class MyConfig
 {
   # Default Form Run Mode
-  static [bool]$Production = $False
+  static [bool]$Production = $True
 
   static [String]$ScriptName = "Process-MyItemList"
   static [Version]$ScriptVersion = [Version]::New("2.0.0.1")
