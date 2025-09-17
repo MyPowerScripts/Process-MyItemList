@@ -12516,9 +12516,9 @@ function Start-PILFormKeyDown
           {
             If (-not $PILTopMenuStrip.Items["ProcessItems"].Enabled)
             {
+              $TmpRSPool.SyncedHash["Terminate"] = $True
               $TmpRSPool = Get-MyRSPool
               Stop-MyRSJob
-              $TmpRSPool.SyncedHash["Terminate"] = $True
               $TmpRSPool.SyncedHash["Pause"] = $False
               Close-MyRSPool
             }
