@@ -4,6 +4,8 @@
 <#
 Change Log for PIL
 ------------------------------------------------------------------------------------------------
+2.0.0.5 - Update Status Message Window Titles
+------------------------------------------------------------------------------------------------
 2.0.0.4 - Add Check for Null Tag on ListView Item to Prevent Reprocessing List items
 ------------------------------------------------------------------------------------------------
 2.0.0.3 - Add PIL Thread Configuration Description
@@ -159,7 +161,7 @@ Class MyConfig
   static [bool]$Production = $True
 
   static [String]$ScriptName = "Process-MyItemList"
-  static [Version]$ScriptVersion = [Version]::New("2.0.0.4")
+  static [Version]$ScriptVersion = [Version]::New("2.0.0.5")
   static [String]$ScriptAuthor = "Ken Sweet"
 
   # Script Configuration
@@ -11164,6 +11166,7 @@ function Update-ThreadConfiguration ()
             Break
           }
         }
+        $PILBtmStatusStrip.Items["Status"].Text = "Loading Sample Config $($ConfigName)"
         $HashTable = @{"ShowHeader" = $True; "ConfigObject" = $ConfigObject; "ConfigName" = $ConfigName}
         $ScriptBlock = { [CmdletBinding()] param ([System.Windows.Forms.RichTextBox]$RichTextBox, [HashTable]$HashTable) Load-PILConfigFIleJson -RichTextBox $RichTextBox -HashTable $HashTable }
         $DialogResult = Show-RichTextStatus -ScriptBlock $ScriptBlock -Title ($PILBtmStatusStrip.Items["Status"].Text) -ButtonMid "OK" -HashTable $HashTable
@@ -13508,7 +13511,7 @@ Function Start-PILItemListContextMenuStripItemClick
           # Build RunSpace Pool
           $HashTable = @{ "ShowHeader" = $True; "ListItems" = $TmpListItems } 
           $ScriptBlock = { [CmdletBinding()] Param ([System.Windows.Forms.RichTextBox]$RichTextBox, [HashTable]$HashTable) Start-ProcessingItems -RichTextBox $RichTextBox -HashTable $HashTable }
-          $DialogResult = Show-RichTextStatus -ScriptBlock $ScriptBlock -Title "Initializing $([MyConfig]::ScriptName)" -ButtonMid "OK" -HashTable $HashTable -AutoClose -AutoCloseWait 1
+          $DialogResult = Show-RichTextStatus -ScriptBlock $ScriptBlock -Title ($PILBtmStatusStrip.Items["Status"].Text) -ButtonMid "OK" -HashTable $HashTable -AutoClose -AutoCloseWait 1
           
           # Set Processing ToolStrip Menu Items
           $PILPlayProcButton.Enabled = $False
@@ -14345,7 +14348,7 @@ function Start-PILTopMenuStripItemClick
       {
         $HashTable = @{"ShowHeader" = $True; "ImportFile" = $PILOpenFileDialog.FileName }
         $ScriptBlock = { [CmdletBinding()] param ([System.Windows.Forms.RichTextBox]$RichTextBox, [HashTable]$HashTable) Load-PILDataExport -RichTextBox $RichTextBox -HashTable $HashTable }
-        $DialogResult = Show-RichTextStatus -ScriptBlock $ScriptBlock -Title "Initializing $([MyConfig]::ScriptName)" -ButtonMid "OK" -HashTable $HashTable
+        $DialogResult = Show-RichTextStatus -ScriptBlock $ScriptBlock -Title ($PILBtmStatusStrip.Items["Status"].Text) -ButtonMid "OK" -HashTable $HashTable
         If ($DialogResult.Success)
         {
           $PILItemListListView.Columns[0].Width = -2
@@ -14614,7 +14617,7 @@ function Start-PILTopMenuStripItemClick
             # Build RunSpace Pool
             $HashTable = @{ "ShowHeader" = $True; "ListItems" = $TmpListItems }
             $ScriptBlock = { [CmdletBinding()] Param ([System.Windows.Forms.RichTextBox]$RichTextBox, [HashTable]$HashTable) Start-ProcessingItems -RichTextBox $RichTextBox -HashTable $HashTable }
-            $DialogResult = Show-RichTextStatus -ScriptBlock $ScriptBlock -Title "Initializing $([MyConfig]::ScriptName)" -ButtonMid "OK" -HashTable $HashTable -AutoClose -AutoCloseWait 1
+            $DialogResult = Show-RichTextStatus -ScriptBlock $ScriptBlock -Title ($PILBtmStatusStrip.Items["Status"].Text) -ButtonMid "OK" -HashTable $HashTable -AutoClose -AutoCloseWait 1
             
             # Set Processing ToolStrip Menu Items
             $PILPlayProcButton.Enabled = $False
