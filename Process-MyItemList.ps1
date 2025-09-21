@@ -4,6 +4,8 @@
 <#
 Change Log for PIL
 ------------------------------------------------------------------------------------------------
+2.0.0.7 - Add Fix to Add/Import Item List for PowerShell 7.5.3
+------------------------------------------------------------------------------------------------
 2.0.0.6 - Add Fix to Wait-MyRSJobs for PowerShell 7.x
 ------------------------------------------------------------------------------------------------
 2.0.0.5 - Update Status Message Window Titles
@@ -163,7 +165,7 @@ Class MyConfig
   static [bool]$Production = $True
 
   static [String]$ScriptName = "Process-MyItemList"
-  static [Version]$ScriptVersion = [Version]::New("2.0.0.6")
+  static [Version]$ScriptVersion = [Version]::New("2.0.0.7")
   static [String]$ScriptAuthor = "Ken Sweet"
 
   # Script Configuration
@@ -11178,13 +11180,14 @@ function Update-ThreadConfiguration ()
           If ($ConfigName -eq "Sample - Demo")
           {
             $PILItemListListView.BeginUpdate()
-            $TmpSubItems = @("") * [MyRuntime]::CurrentColumns
+            #$TmpSubItems = @("") * [MyRuntime]::CurrentColumns
             For ($I = 0; $I -lt 50; $I++)
             {
               $TmpListItem = [System.Windows.Forms.ListViewItem]::New(("Sample List Item {0:00}" -f $I), "StatusInfo16Icon")
               $TmpListItem.Name = $TmpItem
               $TmpListItem.Font = [MyConfig]::Font.Regular
-              $TmpListItem.SubItems.AddRange($TmpSubItems)
+              #$TmpListItem.SubItems.AddRange($TmpSubItems)
+              $TmpListItem.SubItems.AddRange([System.Windows.Forms.ListViewItem+ListViewSubItem[]]@((1..([MyRuntime]::CurrentColumns)) | ForEach-Object -Process { [System.Windows.Forms.ListViewItem+ListViewSubItem]::New($TmpListItem, "") }))
               [Void]$PILItemListListView.Items.Add($TmpListItem)
             }
             $PILItemListListView.Columns[0].Width = -2
@@ -14210,7 +14213,7 @@ function Start-PILTopMenuStripItemClick
       If ($DialogResult.Success)
       {
         $NewCount = 0
-        $TmpSubItems = @("") * [MyRuntime]::CurrentColumns
+        #$TmpSubItems = @("") * [MyRuntime]::CurrentColumns
         $PILItemListListView.BeginUpdate()
         ForEach ($TmpItem In $DialogResult.Items)
         {
@@ -14218,7 +14221,8 @@ function Start-PILTopMenuStripItemClick
           {
             $TmpListItem = [System.Windows.Forms.ListViewItem]::New($TmpItem, "StatusInfo16Icon", [MyConfig]::Colors.TextFore, [MyConfig]::Colors.TextBack, [MyConfig]::Font.Regular)
             $TmpListItem.Name = $TmpItem
-            $TmpListItem.SubItems.AddRange($TmpSubItems)
+            #$TmpListItem.SubItems.AddRange($TmpSubItems)
+            $TmpListItem.SubItems.AddRange([System.Windows.Forms.ListViewItem+ListViewSubItem[]]@((1..([MyRuntime]::CurrentColumns)) | ForEach-Object -Process { [System.Windows.Forms.ListViewItem+ListViewSubItem]::New($TmpListItem, "") }))
             [Void]$PILItemListListView.Items.Add($TmpListItem)
             $NewCount++
           }
@@ -14294,7 +14298,7 @@ function Start-PILTopMenuStripItemClick
           Else
           {
             $NewCount = 0
-            $TmpSubItems = @("") * [MyRuntime]::CurrentColumns
+            #$TmpSubItems = @("") * [MyRuntime]::CurrentColumns
             $PILItemListListView.BeginUpdate()
             ForEach ($TmpItem In $TmpItems)
             {
@@ -14302,7 +14306,8 @@ function Start-PILTopMenuStripItemClick
               {
                 $TmpListItem = [System.Windows.Forms.ListViewItem]::New($TmpItem, "StatusInfo16Icon", [MyConfig]::Colors.TextFore, [MyConfig]::Colors.TextBack, [MyConfig]::Font.Regular)
                 $TmpListItem.Name = $TmpItem
-                $TmpListItem.SubItems.AddRange($TmpSubItems)
+                #$TmpListItem.SubItems.AddRange($TmpSubItems)
+                $TmpListItem.SubItems.AddRange([System.Windows.Forms.ListViewItem+ListViewSubItem[]]@((1..([MyRuntime]::CurrentColumns)) | ForEach-Object -Process { [System.Windows.Forms.ListViewItem+ListViewSubItem]::New($TmpListItem, "") }))
                 [Void]$PILItemListListView.Items.Add($TmpListItem)
                 $NewCount++
               }
@@ -14776,17 +14781,17 @@ function Start-PILTopMenuStripItemClick
       If ($DialogResult.Success)
       {
         [MyRuntime]::ConfigName = $ConfigName
-        
         If ($ConfigName -eq "Sample - Demo")
         {
           $PILItemListListView.BeginUpdate()
-          $TmpSubItems = @("") * [MyRuntime]::CurrentColumns
+          #$TmpSubItems = @("") * [MyRuntime]::CurrentColumns
           For ($I = 0; $I -lt 50; $I++)
           {
             $TmpListItem = [System.Windows.Forms.ListViewItem]::New(("Sample List Item {0:00}" -f $I), "StatusInfo16Icon")
             $TmpListItem.Name = $TmpItem
             $TmpListItem.Font = [MyConfig]::Font.Regular
-            $TmpListItem.SubItems.AddRange($TmpSubItems)
+            #$TmpListItem.SubItems.AddRange($TmpSubItems)
+            $TmpListItem.SubItems.AddRange([System.Windows.Forms.ListViewItem+ListViewSubItem[]]@((1..([MyRuntime]::CurrentColumns)) | ForEach-Object -Process { [System.Windows.Forms.ListViewItem+ListViewSubItem]::New($TmpListItem, "") }))
             [Void]$PILItemListListView.Items.Add($TmpListItem)
           }
           $PILItemListListView.Columns[0].Width = -2
