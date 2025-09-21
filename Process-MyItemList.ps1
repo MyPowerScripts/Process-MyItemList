@@ -4,6 +4,8 @@
 <#
 Change Log for PIL
 ------------------------------------------------------------------------------------------------
+2.0.0.6 - Add Fix to Wait-MyRSJobs for PowerShell 7.x
+------------------------------------------------------------------------------------------------
 2.0.0.5 - Update Status Message Window Titles
 ------------------------------------------------------------------------------------------------
 2.0.0.4 - Add Check for Null Tag on ListView Item to Prevent Reprocessing List items
@@ -161,7 +163,7 @@ Class MyConfig
   static [bool]$Production = $True
 
   static [String]$ScriptName = "Process-MyItemList"
-  static [Version]$ScriptVersion = [Version]::New("2.0.0.5")
+  static [Version]$ScriptVersion = [Version]::New("2.0.0.6")
   static [String]$ScriptAuthor = "Ken Sweet"
 
   # Script Configuration
@@ -2650,9 +2652,8 @@ function Wait-MyRSJob()
     }
     else
     {
-      [Object[]]$CheckJobs = $WaitJobs.ToArray()
       $StopWatch = [System.Diagnostics.Stopwatch]::StartNew()
-      While (@(($CheckJobs = $CheckJobs | Where-Object -FilterScript { $PSItem.State -notmatch "Stopped|Completed|Failed" })).Count -and (($StopWatch.TotalSeconds -le $Wait) -or ($Wait -eq 0)))
+      while ((@(($WaitJobs | Where-Object -FilterScript { $PSItem.State -notmatch "Stopped|Completed|Failed" }| Where-Object -FilterScript { -not [String]::IsNullOrEmpty($PSItem) })).Count -gt 0) -and (($StopWatch.TotalSeconds -le $Wait) -or ($Wait -eq 0)))
       {
         $SciptBlock.Invoke()
       }
