@@ -38,7 +38,7 @@ Function Get-MyADDomain ()
     {
       $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Domain
       $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)
-      [System.DirectoryServices.ActiveDirectory.Domian]::GetDomain($DirectoryContext)
+      [System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($DirectoryContext)
       $DirectoryContext = $Null
       $DirectoryContextType = $Null
       Break

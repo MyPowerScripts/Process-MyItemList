@@ -57,6 +57,8 @@ Param (
   [Parameter(Mandatory = $False, ParameterSetName = "ConfigFile")]
   [String]$ImportFile
 )
+Import-Module Microsoft.Graph.Authentication
+
 
 $ErrorActionPreference = "Stop"
 #$ErrorActionPreference = "Continue"
@@ -162,7 +164,7 @@ Class Font
 Class MyConfig
 {
   # Default Form Run Mode
-  static [bool]$Production = $True
+  static [bool]$Production = $False
 
   static [String]$ScriptName = "Process-MyItemList"
   static [Version]$ScriptVersion = [Version]::New("2.0.0.7")
@@ -602,7 +604,7 @@ $GetDomainComputer = @'
     },
     "Get-MyADDomain": {
       "Name": "Get-MyADDomain",
-      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Gets information about an Active Directory Domain.\r\n    .DESCRIPTION\r\n      Retrieves the Active Directory Domain object either for the current domain, a specified domain name, or the domain associated with the local computer.\r\n    .PARAMETER Name\r\n      The name of the Active Directory domain to retrieve. This parameter is mandatory when using the \"Name\" parameter set.\r\n    .PARAMETER Computer\r\n      Switch parameter. If specified, retrieves the Active Directory domain associated with the local computer. This parameter is mandatory when using the \"Computer\" parameter set.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain\r\n      Retrieves the current Active Directory domain.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Computer\r\n      Retrieves the Active Directory domain associated with the local computer.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Name \"contoso.com\"\r\n      Retrieves the Active Directory domain with the name \"contoso.com\".\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Current\")]\r\n  param (\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Name\")]\r\n    [String]$Name,\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Computer\")]\r\n    [Switch]$Computer\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  switch ($PSCmdlet.ParameterSetName)\r\n  {\r\n    \"Name\"\r\n    {\r\n      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Domain\r\n      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)\r\n      [System.DirectoryServices.ActiveDirectory.Domian]::GetDomain($DirectoryContext)\r\n      $DirectoryContext = $Null\r\n      $DirectoryContextType = $Null\r\n      break\r\n    }\r\n    \"Computer\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain()\r\n      break\r\n    }\r\n    \"Current\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()\r\n      break\r\n    }\r\n  }\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
+      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Gets information about an Active Directory Domain.\r\n    .DESCRIPTION\r\n      Retrieves the Active Directory Domain object either for the current domain, a specified domain name, or the domain associated with the local computer.\r\n    .PARAMETER Name\r\n      The name of the Active Directory domain to retrieve. This parameter is mandatory when using the \"Name\" parameter set.\r\n    .PARAMETER Computer\r\n      Switch parameter. If specified, retrieves the Active Directory domain associated with the local computer. This parameter is mandatory when using the \"Computer\" parameter set.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain\r\n      Retrieves the current Active Directory domain.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Computer\r\n      Retrieves the Active Directory domain associated with the local computer.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Name \"contoso.com\"\r\n      Retrieves the Active Directory domain with the name \"contoso.com\".\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Current\")]\r\n  param (\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Name\")]\r\n    [String]$Name,\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Computer\")]\r\n    [Switch]$Computer\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  switch ($PSCmdlet.ParameterSetName)\r\n  {\r\n    \"Name\"\r\n    {\r\n      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Domain\r\n      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($DirectoryContext)\r\n      $DirectoryContext = $Null\r\n      $DirectoryContextType = $Null\r\n      break\r\n    }\r\n    \"Computer\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain()\r\n      break\r\n    }\r\n    \"Current\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()\r\n      break\r\n    }\r\n  }\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
     }
   },
   "Variables": {
@@ -656,7 +658,7 @@ $GetDomainUser = @'
     },
     "Get-MyADDomain": {
       "Name": "Get-MyADDomain",
-      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Gets information about an Active Directory Domain.\r\n    .DESCRIPTION\r\n      Retrieves the Active Directory Domain object either for the current domain, a specified domain name, or the domain associated with the local computer.\r\n    .PARAMETER Name\r\n      The name of the Active Directory domain to retrieve. This parameter is mandatory when using the \"Name\" parameter set.\r\n    .PARAMETER Computer\r\n      Switch parameter. If specified, retrieves the Active Directory domain associated with the local computer. This parameter is mandatory when using the \"Computer\" parameter set.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain\r\n      Retrieves the current Active Directory domain.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Computer\r\n      Retrieves the Active Directory domain associated with the local computer.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Name \"contoso.com\"\r\n      Retrieves the Active Directory domain with the name \"contoso.com\".\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Current\")]\r\n  param (\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Name\")]\r\n    [String]$Name,\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Computer\")]\r\n    [Switch]$Computer\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  switch ($PSCmdlet.ParameterSetName)\r\n  {\r\n    \"Name\"\r\n    {\r\n      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Domain\r\n      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)\r\n      [System.DirectoryServices.ActiveDirectory.Domian]::GetDomain($DirectoryContext)\r\n      $DirectoryContext = $Null\r\n      $DirectoryContextType = $Null\r\n      break\r\n    }\r\n    \"Computer\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain()\r\n      break\r\n    }\r\n    \"Current\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()\r\n      break\r\n    }\r\n  }\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
+      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Gets information about an Active Directory Domain.\r\n    .DESCRIPTION\r\n      Retrieves the Active Directory Domain object either for the current domain, a specified domain name, or the domain associated with the local computer.\r\n    .PARAMETER Name\r\n      The name of the Active Directory domain to retrieve. This parameter is mandatory when using the \"Name\" parameter set.\r\n    .PARAMETER Computer\r\n      Switch parameter. If specified, retrieves the Active Directory domain associated with the local computer. This parameter is mandatory when using the \"Computer\" parameter set.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain\r\n      Retrieves the current Active Directory domain.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Computer\r\n      Retrieves the Active Directory domain associated with the local computer.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Name \"contoso.com\"\r\n      Retrieves the Active Directory domain with the name \"contoso.com\".\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Current\")]\r\n  param (\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Name\")]\r\n    [String]$Name,\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Computer\")]\r\n    [Switch]$Computer\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  switch ($PSCmdlet.ParameterSetName)\r\n  {\r\n    \"Name\"\r\n    {\r\n      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Domain\r\n      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($DirectoryContext)\r\n      $DirectoryContext = $Null\r\n      $DirectoryContextType = $Null\r\n      break\r\n    }\r\n    \"Computer\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain()\r\n      break\r\n    }\r\n    \"Current\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()\r\n      break\r\n    }\r\n  }\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
     }
   },
   "Variables": {
@@ -1054,6 +1056,7 @@ function New-MenuItem()
     [System.Drawing.ContentAlignment]$Alignment = "MiddleCenter",
     [Object]$Tag,
     [Switch]$Disable,
+    [Switch]$Hide,
     [Switch]$Check,
     [Switch]$ClickOnCheck,
     [System.Windows.Forms.Keys]$ShortcutKeys = "None",
@@ -1099,7 +1102,7 @@ function New-MenuItem()
   $TempMenuItem.CheckOnClick = $ClickOnCheck.IsPresent
   $TempMenuItem.DisplayStyle = $DisplayStyle
   $TempMenuItem.Enabled = (-not $Disable.IsPresent)
-
+  $TempMenuItem.Visible = (-not $Hide.IsPresent)
   $TempMenuItem.BackColor = $BackColor
   $TempMenuItem.ForeColor = $ForeColor
   $TempMenuItem.Font = $Font
@@ -7963,6 +7966,23 @@ Function Display-InitiliazePILUtility()
   
   Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Modules Discovered" -Value ([MyRuntime]::Modules.Count)
   
+  If ([MyRuntime]::Modules.ContainsKey("Az.Accounts"))
+  {
+    If ([MyRuntime]::Modules["Az.Accounts"].Version -ge [Version]::New(4, 0, 0))
+    {
+      $PILTopMenuStrip.Items["CloudLogon"].Visible = $True
+      $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].Visible = $True
+    }
+  }
+  If ([MyRuntime]::Modules.ContainsKey("Microsoft.Graph.Authentication"))
+  {
+    If ([MyRuntime]::Modules["Microsoft.Graph.Authentication"].Version -ge [Version]::New(2, 28, 0))
+    {
+      $PILTopMenuStrip.Items["CloudLogon"].Visible = $True
+      $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].Visible = $True
+    }
+  }
+  
   If (-not [String]::IsNullOrEmpty($ConfigFile))
   {
     $HashTable = @{"ShowHeader" = $False; "ConfigFile" = $ConfigFile }
@@ -9811,6 +9831,7 @@ Function Monitor-RunspacePoolThreads ()
   # Re-Enable Main Menu Items
   $PILTopMenuStrip.Items["AddItems"].Enabled = $True
   $PILTopMenuStrip.Items["Configure"].Enabled = $True
+  $PILTopMenuStrip.Items["CloudLogon"].Enabled = $True
   $PILTopMenuStrip.Items["ProcessItems"].Enabled = $True
   $PILTopMenuStrip.Items["ListData"].Enabled = $True
   
@@ -12445,6 +12466,22 @@ AAAAAAAAAAGsQcAHrEGAA6xBgAOsQYADrEGAA6xBgAOsQYADrEGAA6xBAAGsQQAArEEAAKxBAAGsQQAB
 #endregion ******** $Trash16Icon ********
 $PILSmallImageList.Images.Add("Trash16Icon", [System.Drawing.Icon]::New([System.IO.MemoryStream]::New([System.Convert]::FromBase64String($Trash16Icon))))
 
+#region ******** $Cloud16Icon ********
+$Cloud16Icon = @"
+AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD+pJBp/aqWjv6cgx3+nIQr/aqVl/6fhCIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/q2b2//JwP/+uKnF/rOiyf/L
+wv/9oolw/p2DFgAAAAAAAAAAAAAAAAAAAAAAAAAA/pt/CP6um6/+pY9y/quYrf66rPz+u63//sO3///Nw///1c7+/8i+//6you3+p5B9/qOKYP+chBT9sJpN/sS1t/68rKj/yb7v/9TN///KwP//0sr//sS5///R
+yf//0Mf//9LK///Wz///1Mz//9fP//7Euf/9ppGB/q+ZSP7KvKb+0cXd/+Pd///Wz///2NH//9fQ///Vzv/+x73//se9///Mw///08v//9rU///Qx/7+po1V/puAAQAAAAD+nIEP/+zn9//g2v//5+P//97Z///g
+2///19D//9jS///Y0f//29X//+Tf///s5//+1szV/qmWRAAAAAAAAAAA/5yJEP7Gt5L+s55i/s/Cwf7Pwcn/49z8/9bP///X0f//19D//9nS///f2P//5uD7/q+YVwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAD9sJhT/+3q///Vzv//5+L//+La9P/Z0v//5+P//runmv+YfAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/qOMNv/y8P//9/X//rytg/6bhyb/4dvu//Ty//7KvKcAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAP+YhQP+taF7/reic/+ZgwYAAAAA/rGdTv6/rY3+oYwsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAA//+sQf//rEH//6xB/A+sQfwHrEHAAKxBAACsQQAArEGAAaxBgAOsQfgDrEH4B6xB+EesQf//rEH//6xB//+sQQ==
+"@
+#endregion ******** $Cloud16Icon ********
+$PILSmallImageList.Images.Add("Cloud16Icon", [System.Drawing.Icon]::New([System.IO.MemoryStream]::New([System.Convert]::FromBase64String($Cloud16Icon))))
+
 #endregion ******** PIL Small Image Icons ********
 
 
@@ -13503,6 +13540,7 @@ Function Start-PILItemListContextMenuStripItemClick
           # Disable Main Menu Iteme
           $PILTopMenuStrip.Items["AddItems"].Enabled = $False
           $PILTopMenuStrip.Items["Configure"].Enabled = $False
+          $PILTopMenuStrip.Items["CloudLogon"].Enabled = $False
           $PILTopMenuStrip.Items["ProcessItems"].Enabled = $False
           $PILTopMenuStrip.Items["ListData"].Enabled = $False
           
@@ -14611,6 +14649,7 @@ function Start-PILTopMenuStripItemClick
             # Disable Main Menu Iteme
             $PILTopMenuStrip.Items["AddItems"].Enabled = $False
             $PILTopMenuStrip.Items["Configure"].Enabled = $False
+            $PILTopMenuStrip.Items["CloudLogon"].Enabled = $False
             $PILTopMenuStrip.Items["ProcessItems"].Enabled = $False
             $PILTopMenuStrip.Items["ListData"].Enabled = $False
             
@@ -14723,6 +14762,43 @@ function Start-PILTopMenuStripItemClick
       }
       Break
       #endregion Clear Item List
+    }
+    "CloudAz"
+    {
+      Break
+    }
+    "CloudGraph"
+    {
+      $PILBtmStatusStrip.Items["Status"].Text = "Login to Microsoft Graph API"
+      $PILBtmStatusStrip.Refresh()
+      
+      $TmpModule = "Microsoft.Graph.Authentication"
+      Import-Module -Name $TmpModule -ErrorAction SilentlyContinue
+      $ChkModule = Get-Module -Name $TmpModule
+      If ($ChkModule.Name -eq $TmpModule)
+      {
+        Disconnect-MgGraph -ErrorAction SilentlyContinue
+        
+        $DialogResult = Get-TextBoxInput -Title "Enter App Registration ClientID" -Message "Enter the ClientID of the Application Regisation to use for the Microsoft Graph API Logon." -Items "Default"
+        If ($DialogResult.Success)
+        {
+          $TmpClientID = $DialogResult.Text[0]
+          If ($TmpClientID -match "[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}")
+          {
+            Connect-MgGraph -NoWellcome -ClientId $TmpClientID
+          }
+          Else
+          {
+            Connect-MgGraph -NoWellcome
+          }
+          $PILBtmStatusStrip.Items["Status"].Text = "Successfully Logged in to Microsoft Graph API"
+        }
+        Else
+        {
+          $PILBtmStatusStrip.Items["Status"].Text = "Cancelled Logging in to Microsoft Graph API"
+        }
+      }
+      Break
     }
     "Sample"
     {
@@ -14875,6 +14951,11 @@ New-MenuSeparator -Menu $SubDropDownMenu
 (New-MenuItem -Menu $SubDropDownMenu -Text "PIL Starter Config" -Name "Sample" -Tag "StarterConfig" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 New-MenuSeparator -Menu $SubDropDownMenu
 (New-MenuItem -Menu $SubDropDownMenu -Text "PIL Demo Script" -Name "Sample" -Tag "SampleDemo" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+
+
+$DropDownMenu = New-MenuItem -Menu $PILTopMenuStrip -Text "Cloud Logon $([char]0x00BB)" -Name "CloudLogon" -Tag "CloudLogon" -DisplayStyle "ImageAndText" -ImageKey "Cloud16Icon" -TextImageRelation "ImageBeforeText" -PassThru -Hide
+(New-MenuItem -Menu $DropDownMenu -Text "Az.Accounts" -Name "CloudAz" -Tag "CloudAz" -DisplayStyle "ImageAndText" -ImageKey "Cloud16Icon" -TextImageRelation "ImageBeforeText" -PassThru -Hide).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $DropDownMenu -Text "Microsoft.Graph.Authentication" -Name "CloudGraph" -Tag "CloudGraph" -DisplayStyle "ImageAndText" -ImageKey "Cloud16Icon" -TextImageRelation "ImageBeforeText" -PassThru -Hide).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 
 New-MenuSeparator -Menu $PILTopMenuStrip
 (New-MenuItem -Menu $PILTopMenuStrip -Text "Process Items" -Name "ProcessItems" -Tag "ProcessItems" -DisplayStyle "ImageAndText" -ImageKey "Process16Icon" -TextImageRelation "ImageBeforeText" -ClickOnCheck -Check -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
