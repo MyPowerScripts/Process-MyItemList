@@ -14765,10 +14765,58 @@ function Start-PILTopMenuStripItemClick
     }
     "CloudAz"
     {
+      #region Login to Azure/EntraID
+      $PILBtmStatusStrip.Items["Status"].Text = "Login to Azure/EntraID"
+      $PILBtmStatusStrip.Refresh()
+      
+      $TmpModule = "Az.Accounts"
+      Import-Module -Name $TmpModule -ErrorAction SilentlyContinue
+      $ChkModule = Get-Module -Name $TmpModule
+      If ($ChkModule.Name -eq $TmpModule)
+      {
+        Disconnect-MgGraph -ErrorAction SilentlyContinue
+        
+        $OrderedItems = [Ordered]@{
+          "Tenant ID" = $Null
+          "Subscription ID" = $Null
+        }
+        $DialogResult = Get-MultiTextBoxInput -Title "Get Multi Text Input" -Message "Enter the Tenant ID and Subscription ID of Azure/EntraID to Login to." -OrderedItems $OrderedItems -AllRequired
+        If ($DialogResult.Success)
+        {
+          Try
+          {
+            $TenantID = $DialogResult.OrderedItems["Tenant ID"]
+            $SubscriptionID = $DialogResult.OrderedItems["Subscription ID"]
+            
+            If (($TenantID -match "[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}") -and ($SubscriptionID -match "[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}"))
+            {
+              Disconnect-AzAccount -ErrorAction SilentlyContinue
+              Update-AzConfig -EnableLoginByWam $False -DisplayBreakingChangeWarning $False -WarningAction SilentlyContinue | Out-Null
+              $ChkLogon = Connect-AzAccount -Tenant $TenantID -Subscription $SubscriptionID -Force -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+              #$ChkLogon = Get-AzContext
+              $PILBtmStatusStrip.Items["Status"].Text = "Successfully Logged in to Azure/EntraID"
+            }
+            Else
+            {
+              $PILBtmStatusStrip.Items["Status"].Text = "Invalid Tenant and/or Subscription ID"
+            }
+          }
+          Catch
+          {
+            $PILBtmStatusStrip.Items["Status"].Text = "Error Logging in to Azure/EntraID"
+          }
+        }
+        Else
+        {
+          $PILBtmStatusStrip.Items["Status"].Text = "Cancelled Logging in to Azure/EntraID"
+        }
+      }
       Break
+      #endregion Login to Azure/EntraID
     }
     "CloudGraph"
     {
+      #region Login to Microsoft Graph API
       $PILBtmStatusStrip.Items["Status"].Text = "Login to Microsoft Graph API"
       $PILBtmStatusStrip.Refresh()
       
@@ -14779,19 +14827,27 @@ function Start-PILTopMenuStripItemClick
       {
         Disconnect-MgGraph -ErrorAction SilentlyContinue
         
-        $DialogResult = Get-TextBoxInput -Title "Enter App Registration ClientID" -Message "Enter the ClientID of the Application Regisation to use for the Microsoft Graph API Logon." -Items "Default"
+        $DialogResult = Get-TextBoxInput -Title "Enter App Registration ClientID" -Message "Enter the ClientID of the Application Regisation to use for the Microsoft Graph API Logon." -Items "Use Default Graph API Application Registration"
         If ($DialogResult.Success)
         {
-          $TmpClientID = $DialogResult.Text[0]
-          If ($TmpClientID -match "[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}")
+          Try
           {
-            Connect-MgGraph -NoWellcome -ClientId $TmpClientID
+            $TmpClientID = $DialogResult.Text[0]
+            If ($TmpClientID -match "[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}")
+            {
+              Connect-MgGraph -NoWellcome -ClientId $TmpClientID
+            }
+            Else
+            {
+              Connect-MgGraph -NoWellcome
+            }
+            $ChkLogon = Get-MgContext
+            $PILBtmStatusStrip.Items["Status"].Text = "Successfully Logged in to Microsoft Graph API"
           }
-          Else
+          Catch
           {
-            Connect-MgGraph -NoWellcome
+            $PILBtmStatusStrip.Items["Status"].Text = "Error Logging in to Microsoft Graph API"
           }
-          $PILBtmStatusStrip.Items["Status"].Text = "Successfully Logged in to Microsoft Graph API"
         }
         Else
         {
@@ -14799,6 +14855,7 @@ function Start-PILTopMenuStripItemClick
         }
       }
       Break
+      #endregion Login to Microsoft Graph API
     }
     "Sample"
     {
