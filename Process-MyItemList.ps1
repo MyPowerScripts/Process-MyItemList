@@ -4,6 +4,13 @@
 <#
 Change Log for PIL
 ------------------------------------------------------------------------------------------------
+2.0.0.8 - Add Suport for Loging in to Azure/Graph as Curent User
+            Az.Accounts Version 4.0.2
+              Only supports Modules from Az Version 13.2.0
+            Microsoft.Graph.Authentication Version 2.28.0
+              Only supports Modules from Microsoft.Graph 2.28.0
+          Add MgGraph and Az Sample Configurations
+------------------------------------------------------------------------------------------------
 2.0.0.7 - Add Fix to Add/Import Item List for PowerShell 7.5.3
 ------------------------------------------------------------------------------------------------
 2.0.0.6 - Add Fix to Wait-MyRSJobs for PowerShell 7.x
@@ -165,7 +172,7 @@ Class MyConfig
   static [bool]$Production = $True
 
   static [String]$ScriptName = "Process-MyItemList"
-  static [Version]$ScriptVersion = [Version]::New("2.0.0.7")
+  static [Version]$ScriptVersion = [Version]::New("2.0.0.8")
   static [String]$ScriptAuthor = "Ken Sweet"
 
   # Script Configuration
@@ -445,6 +452,18 @@ Class MyRuntime
   Static [UInt16]$StartColumns = $StartColumns
   Static [UInt16]$CurrentColumns = $StartColumns
   
+  # Azure / Enrta ID Logon
+  Static [String]$TenantID = $Null
+  Static [String]$SubscriptionID = $Null
+  Static [Bool]$AzLogon = $False
+  Static [Version]$AzVersion = [Version]::New(4, 0, 2)
+  
+  # MgGraph Logon
+  Static [String]$ClientID = "Default"
+  Static [bool]$GraphLogon = $False
+  Static [Version]$GraphVersion = [Version]::New(2, 28, 0)
+  
+  
   Static [String[]]$ConfigProperties = @("ColumnNames", "Modules", "Variables", "Functions", "ThreadCount", "ThreadScript", "Description")
   
   # Thread Configuration
@@ -515,14 +534,8 @@ $SampleDemo = @'
     }
   },
   "Variables": {
-    "PromptVariable": {
-      "Name": "PromptVariable",
-      "Value": "*"
-    },
-    "StaticVariable": {
-      "Name": "StaticVariable",
-      "Value": "Static"
-    }
+    "PromptVariable": { "Name": "PromptVariable", "Value": "*" },
+    "StaticVariable": { "Name": "StaticVariable", "Value": "Static" }
   },
   "ThreadCount": 4,
   "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps$Columns[\"Status\"] -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding(DefaultParameterSetName = \"ByValue\")]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n# Set Preference Variables\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n$ProgressPreference = \"SilentlyContinue\"\r\n\r\n# -----------------------------------------------------\r\n# Build ListView Column Lookup Table\r\n#\r\n# Reference Columns by Name Incase Column Order Changes\r\n# -----------------------------------------------------\r\n$Columns = @{\r\n}\r\n$ListViewItem.ListView.Columns | ForEach-Object -Process {\r\n  $Columns.Add($PSItem.Text, $PSItem.Index)\r\n}\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n#\r\n# One Column needs to be the Status the the Thread\r\n#  Status Messages are Customizable\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$Columns[\"Status\"]].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Pasue if Needed\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Pause)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[$Columns[\"Status\"]].Text = \"Pause\"\r\n  While ($SyncedHash.Pause)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n#\r\n# You can add Multiple Checks for Termination if Needed\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Return\r\n  $ListViewItem.SubItems[$Columns[\"Status\"]].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$Columns[\"Term/Proc Times\"]].Text = [DateTime]::Now.ToString(\"HH:mm:ss:ffff\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Set Proccessing Ststus\r\n$ListViewItem.SubItems[$Columns[\"Status\"]].Text = \"Processing\"\r\n$ListViewItem.SubItems[$Columns[\"Term/Proc Times\"]].Text = [DateTime]::Now.ToString(\"HH:mm:ss:ffff\")\r\n$WasSuccess = $True\r\n\r\n# Set Prompt Variable\r\n$ListViewItem.SubItems[$Columns[\"Prompt Variable\"]].Text = $PromptVariable\r\n\r\n# --------------------------------------------------\r\n# Get Curent List Item\r\n#\r\n# Coulmn 0 Always has the List Item to be Proccessed\r\n# --------------------------------------------------\r\n$CurentItem = $ListViewItem.SubItems[$Columns[\"List Item\"]].Text\r\n# For Testing you can Write to the Screen\r\nWrite-Host -Object \"Processing $($CurentItem)\"\r\n\r\n# --------------------------------------------------------------\r\n# Open and wait for Mutex\r\n# \r\n# This is to Pause the Thread Script if Access a Shared Resource\r\n#   and you need toi Limit to $Columns[\"Status\"] Thread at a Time\r\n#\r\n# Using a Mutext is Optional\r\n# --------------------------------------------------------------\r\n$MyMutex = [System.Threading.Mutex]::OpenExisting($Mutex)\r\n[Void]($MyMutex.WaitOne())\r\n\r\n# Set Date / Time when Mutext was Opened\r\n$ListViewItem.SubItems[$Columns[\"Open Mutex\"]].Text = [DateTime]::Now.ToString(\"HH:mm:ss:ffff\")\r\n\r\n# Access / Update Shared Resources\r\n# $CurrentItem | Out-File -Encoding ascii -FilePath \"C:\\SharedFile.txt\"\r\n\r\n# Release Mutex\r\n$MyMutex.ReleaseMutex()\r\n\r\n# --------------------------------------------------------------------------------\r\n# The Synced HashTable has an Object Property to share information between Threads\r\n# --------------------------------------------------------------------------------\r\nIf ([String]::IsNullOrEmpty($SyncedHash.Object))\r\n{\r\n  $SyncedHash.Object = \"First\"\r\n}\r\n$ListViewItem.SubItems[$Columns[\"Synced Hash\"]].Text = $SyncedHash.Object\r\n$SyncedHash.Object = $CurentItem\r\n\r\n\r\n# Random Number Generator\r\n$Random = [System.Random]::New()\r\n\r\n# ---------------------------------------------------------\r\n# Gernate a Fake Error\r\n#\r\n# Make sure to use Error Catching to make sure thread exits\r\n# ---------------------------------------------------------\r\nTry\r\n{\r\n  Switch ($Random.Next(0, 3))\r\n  {\r\n    \"0\"\r\n    {\r\n      Throw \"This is a Fake Error!\"\r\n      Break\r\n    }\r\n    \"1\"\r\n    {\r\n      Throw \"Simulated Error!\"\r\n      Break\r\n    }\r\n    \"2\"\r\n    {\r\n      Throw \"Someing Failed!\"\r\n      Break\r\n    }\r\n    \"3\"\r\n    {\r\n      Throw \"Unknown Error!\"\r\n      Break\r\n    }\r\n  }\r\n}\r\nCatch\r\n{\r\n  # Save Error Mesage\r\n  $ListViewItem.SubItems[$Columns[\"Fake Error\"]].Text = $Error[0].Exception.Message\r\n}\r\n\r\n$ListViewItem.SubItems[$Columns[\"Function Test\"]].Text = Return-HelloWorld -InputValue \"Hello World\"\r\n$ListViewItem.SubItems[$Columns[\"Static Variable\"]].Text = $StaticVariable\r\n\r\n$RndValue = $Random.Next(0, 3)\r\nFor ($I = 10; $I -lt 16; $I++)\r\n{\r\n  $ListViewItem.SubItems[$I].Text = [DateTime]::Now.ToString(\"HH:mm:ss:ffff\")\r\n  [System.Threading.Thread]::Sleep(100)\r\n}\r\n\r\n# Random Fail Simlater\r\nIf ($RndValue -eq 0)\r\n{\r\n  $WasSuccess = $False\r\n}\r\n$ListViewItem.SubItems[$Columns[\"WasSuccess\"]].Text = $WasSuccess\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$Columns[\"Term/Proc Times\"]].Text = [DateTime]::Now.ToString(\"HH:mm:ss:ffff\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status\"]].Text = \"Completed\"\r\n  $ListViewItem.Tag = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status\"]].Text = \"Error\"\r\n}\r\n\r\n# Testing Write to Screen\r\nWrite-Host -Object \"Completed $($CurentItem)\"\r\n\r\nExit\r\n\r\n\r\n\r\n\r\n"
@@ -602,18 +615,12 @@ $GetDomainComputer = @'
     },
     "Get-MyADDomain": {
       "Name": "Get-MyADDomain",
-      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Gets information about an Active Directory Domain.\r\n    .DESCRIPTION\r\n      Retrieves the Active Directory Domain object either for the current domain, a specified domain name, or the domain associated with the local computer.\r\n    .PARAMETER Name\r\n      The name of the Active Directory domain to retrieve. This parameter is mandatory when using the \"Name\" parameter set.\r\n    .PARAMETER Computer\r\n      Switch parameter. If specified, retrieves the Active Directory domain associated with the local computer. This parameter is mandatory when using the \"Computer\" parameter set.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain\r\n      Retrieves the current Active Directory domain.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Computer\r\n      Retrieves the Active Directory domain associated with the local computer.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Name \"contoso.com\"\r\n      Retrieves the Active Directory domain with the name \"contoso.com\".\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Current\")]\r\n  param (\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Name\")]\r\n    [String]$Name,\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Computer\")]\r\n    [Switch]$Computer\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  switch ($PSCmdlet.ParameterSetName)\r\n  {\r\n    \"Name\"\r\n    {\r\n      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Domain\r\n      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)\r\n      [System.DirectoryServices.ActiveDirectory.Domian]::GetDomain($DirectoryContext)\r\n      $DirectoryContext = $Null\r\n      $DirectoryContextType = $Null\r\n      break\r\n    }\r\n    \"Computer\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain()\r\n      break\r\n    }\r\n    \"Current\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()\r\n      break\r\n    }\r\n  }\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
+      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Gets information about an Active Directory Domain.\r\n    .DESCRIPTION\r\n      Retrieves the Active Directory Domain object either for the current domain, a specified domain name, or the domain associated with the local computer.\r\n    .PARAMETER Name\r\n      The name of the Active Directory domain to retrieve. This parameter is mandatory when using the \"Name\" parameter set.\r\n    .PARAMETER Computer\r\n      Switch parameter. If specified, retrieves the Active Directory domain associated with the local computer. This parameter is mandatory when using the \"Computer\" parameter set.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain\r\n      Retrieves the current Active Directory domain.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Computer\r\n      Retrieves the Active Directory domain associated with the local computer.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Name \"contoso.com\"\r\n      Retrieves the Active Directory domain with the name \"contoso.com\".\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Current\")]\r\n  param (\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Name\")]\r\n    [String]$Name,\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Computer\")]\r\n    [Switch]$Computer\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  switch ($PSCmdlet.ParameterSetName)\r\n  {\r\n    \"Name\"\r\n    {\r\n      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Domain\r\n      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($DirectoryContext)\r\n      $DirectoryContext = $Null\r\n      $DirectoryContextType = $Null\r\n      break\r\n    }\r\n    \"Computer\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain()\r\n      break\r\n    }\r\n    \"Current\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()\r\n      break\r\n    }\r\n  }\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
     }
   },
   "Variables": {
-    "ADDomain": {
-      "Name": "ADDomain",
-      "Value": "Current"
-    },
-    "ADForest": {
-      "Name": "ADForest",
-      "Value": "Current"
-    }
+    "ADDomain": { "Name": "ADDomain", "Value": "Current" },
+    "ADForest": { "Name": "ADForest", "Value": "Current" }
   },
   "ThreadCount": 4,
   "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n# Set Preference Variables\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n$ProgressPreference = \"SilentlyContinue\"\r\n\r\n# -----------------------------------------------------\r\n# Build ListView Column Lookup Table\r\n#\r\n# Reference Columns by Name Incase Column Order Changes\r\n# -----------------------------------------------------\r\n$Columns = @{\r\n}\r\n$ListViewItem.ListView.Columns | ForEach-Object -Process {\r\n  $Columns.Add($PSItem.Text, $PSItem.Index)\r\n}\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$Columns[\"Status Message\"]].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Pause)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Pause\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  While ($SyncedHash.Pause)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Processing\"\r\n$ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n$ComputerName = $ListViewItem.SubItems[$Columns[\"ComputerName\"]].Text\r\n\r\nTry\r\n{\r\n  # Get Current Domain / Forest\r\n  If ($ADForest -eq \"Domain\")\r\n  {\r\n    If ($ADDomain -eq \"Current\")\r\n    {\r\n      $GetADDomain = Get-MyADDomain -ErrorAction SilentlyContinue\r\n    }\r\n    Else\r\n    {\r\n      $GetADDomain = Get-MyADDomain -Name $ADDomain -ErrorAction SilentlyContinue\r\n    }\r\n    If (-not [String]::IsNullOrEmpty($GetADDomain.Name))\r\n    {\r\n      $SearchRoot = \"LDAP://$(\"dc=$(($GetADDomain.Name -split \u0027\\.\u0027) -join \u0027,dc=\u0027)\")\"\r\n      $GetADDomain.Dispose()\r\n    }\r\n  }\r\n  Else\r\n  {\r\n    If ($ADDomain -eq \"Current\")\r\n    {\r\n      $GetADForget = Get-MyADForest -ErrorAction SilentlyContinue\r\n    }\r\n    Else\r\n    {\r\n      $GetADForget = Get-MyADForest -Name $ADForest -ErrorAction SilentlyContinue\r\n    }\r\n    If (-not [String]::IsNullOrEmpty($GetADForget.Name))\r\n    {\r\n      $SearchRoot = \"GC://$($GetADForget.Name)\"\r\n      $GetADForget.Dispose()\r\n    }\r\n  }\r\n  \r\n  # Check Domain / Forest Found\r\n  If ([String]::IsNullOrEmpty($SearchRoot))\r\n  {\r\n    $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"Unable to Get Current AD Domain / Forest\"\r\n    $WasSuccess = $False\r\n  }\r\n  Else\r\n  {\r\n    $LDAPFilter = \"(\u0026(objectClass=user)(objectCategory=computer)(sAMAccountType=805306369)(cn={0}))\" -f $ComputerName\r\n    $PropertiesToLoad = @(\"name\", \"canonicalName\", \"lastLogonTimestamp\", \"pwdLastSet\", \"userAccountControl\", \"OperatingSystem\", \"OperatingSystemVersion\", \"distinguishedName\")\r\n    $ADObject = Get-MyADObject -SearchRoot $SearchRoot -SearchScope Subtree -LDAPFilter $LDAPFilter -PropertiesToLoad $PropertiesToLoad -ErrorAction SilentlyContinue | Select-Object -First 1\r\n    If ([String]::IsNullOrEmpty($ADObject.Path))\r\n    {\r\n      $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"Computer Not Found in AD Forest\"\r\n      $WasSuccess = $False\r\n    }\r\n    Else\r\n    {\r\n      # CanonicalName\r\n      $CanonicalName = $ADObject.Properties[\"canonicalName\"][0]\r\n      $ListViewItem.SubItems[$Columns[\"canonicalName\"]].Text = $CanonicalName\r\n      \r\n      # distinguishedName\r\n      $ListViewItem.SubItems[$Columns[\"distinguishedName\"]].Text = $ADObject.Properties[\"distinguishedName\"][0]\r\n      \r\n      # Domain\r\n      $Domain = $CanonicalName -split \"/\" | Select-Object -First 1\r\n      $ListViewItem.SubItems[$Columns[\"Domain\"]].Text = $Domain\r\n      \r\n      # Zero Hour\r\n      $ZeroHour = [DateTime]::New(1601, 1, 1, 0, 0, 0)\r\n      \r\n      # Last Logon TimeStamp\r\n      $LastLogonTimestamp = $ADObject.Properties[\"LastLogonTimestamp\"][0]\r\n      $LastLogonTimeStampDate = $ZeroHour.AddTicks($LastLogonTimestamp)\r\n      $ListViewItem.SubItems[$Columns[\"Last Logon\"]].Text = $LastLogonTimeStampDate.ToString(\"G\")\r\n      \r\n      # Password Last Set\r\n      $PwdLastSet = $ADObject.Properties[\"pwdLastSet\"][0]\r\n      $PwdLastSetDate = $ZeroHour.AddTicks($PwdLastSet)\r\n      $ListViewItem.SubItems[$Columns[\"PwdLastSet\"]].Text = $PwdLastSetDate\r\n      \r\n      # User Account Control Flags\r\n      $UserAccountControl = $ADObject.Properties[\"userAccountControl\"][0]\r\n      $ListViewItem.SubItems[$Columns[\"UserAccountControl\"]].Text = $UserAccountControl\r\n      $ListViewItem.SubItems[$Columns[\"Locked Out\"]].Text = (($UserAccountControl -band 16) -ne 0)\r\n      $ListViewItem.SubItems[$Columns[\"Disabled\"]].Text = (($UserAccountControl -band 2) -ne 0)\r\n      \r\n      # Operating System\r\n      If ($ADForest -eq \"Domain\")\r\n      {\r\n        $ListViewItem.SubItems[$Columns[\"operatingSystem\"]].Text = $ADObject.Properties[\"operatingSystem\"][0]\r\n        $ListViewItem.SubItems[$Columns[\"operatingSystemVersion\"]].Text = $ADObject.Properties[\"operatingSystemVersion\"][0]\r\n      }\r\n      Else\r\n      {\r\n        $ListViewItem.SubItems[$Columns[\"operatingSystem\"]].Text = \"Domain Only\"\r\n        $ListViewItem.SubItems[$Columns[\"operatingSystemVersion\"]].Text = \"Domain Only\"\r\n      }\r\n    }\r\n  }\r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Completed\"\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"\"\r\n  $ListViewItem.Tag = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Error\"\r\n}\r\n\r\nExit\r\n\r\n\r\n\r\n"
@@ -656,18 +663,12 @@ $GetDomainUser = @'
     },
     "Get-MyADDomain": {
       "Name": "Get-MyADDomain",
-      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Gets information about an Active Directory Domain.\r\n    .DESCRIPTION\r\n      Retrieves the Active Directory Domain object either for the current domain, a specified domain name, or the domain associated with the local computer.\r\n    .PARAMETER Name\r\n      The name of the Active Directory domain to retrieve. This parameter is mandatory when using the \"Name\" parameter set.\r\n    .PARAMETER Computer\r\n      Switch parameter. If specified, retrieves the Active Directory domain associated with the local computer. This parameter is mandatory when using the \"Computer\" parameter set.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain\r\n      Retrieves the current Active Directory domain.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Computer\r\n      Retrieves the Active Directory domain associated with the local computer.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Name \"contoso.com\"\r\n      Retrieves the Active Directory domain with the name \"contoso.com\".\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Current\")]\r\n  param (\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Name\")]\r\n    [String]$Name,\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Computer\")]\r\n    [Switch]$Computer\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  switch ($PSCmdlet.ParameterSetName)\r\n  {\r\n    \"Name\"\r\n    {\r\n      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Domain\r\n      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)\r\n      [System.DirectoryServices.ActiveDirectory.Domian]::GetDomain($DirectoryContext)\r\n      $DirectoryContext = $Null\r\n      $DirectoryContextType = $Null\r\n      break\r\n    }\r\n    \"Computer\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain()\r\n      break\r\n    }\r\n    \"Current\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()\r\n      break\r\n    }\r\n  }\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
+      "ScriptBlock": "\r\n  \u003c#\r\n    .SYNOPSIS\r\n      Gets information about an Active Directory Domain.\r\n    .DESCRIPTION\r\n      Retrieves the Active Directory Domain object either for the current domain, a specified domain name, or the domain associated with the local computer.\r\n    .PARAMETER Name\r\n      The name of the Active Directory domain to retrieve. This parameter is mandatory when using the \"Name\" parameter set.\r\n    .PARAMETER Computer\r\n      Switch parameter. If specified, retrieves the Active Directory domain associated with the local computer. This parameter is mandatory when using the \"Computer\" parameter set.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain\r\n      Retrieves the current Active Directory domain.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Computer\r\n      Retrieves the Active Directory domain associated with the local computer.\r\n    .EXAMPLE\r\n      PS C:\\\u003e Get-MyADDomain -Name \"contoso.com\"\r\n      Retrieves the Active Directory domain with the name \"contoso.com\".\r\n    .NOTES\r\n      Original Function By Ken Sweet\r\n  #\u003e\r\n  [CmdletBinding(DefaultParameterSetName = \"Current\")]\r\n  param (\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Name\")]\r\n    [String]$Name,\r\n    [parameter(Mandatory = $True, ParameterSetName = \"Computer\")]\r\n    [Switch]$Computer\r\n  )\r\n  Write-Verbose -Message \"Enter Function $($MyInvocation.MyCommand)\"\r\n\r\n  switch ($PSCmdlet.ParameterSetName)\r\n  {\r\n    \"Name\"\r\n    {\r\n      $DirectoryContextType = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]::Domain\r\n      $DirectoryContext = [System.DirectoryServices.ActiveDirectory.DirectoryContext]::New($DirectoryContextType, $Name)\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($DirectoryContext)\r\n      $DirectoryContext = $Null\r\n      $DirectoryContextType = $Null\r\n      break\r\n    }\r\n    \"Computer\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain()\r\n      break\r\n    }\r\n    \"Current\"\r\n    {\r\n      [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()\r\n      break\r\n    }\r\n  }\r\n\r\n  Write-Verbose -Message \"Exit Function $($MyInvocation.MyCommand)\"\r\n"
     }
   },
   "Variables": {
-    "ADDomain": {
-      "Name": "ADDomain",
-      "Value": "Current"
-    },
-    "ADForest": {
-      "Name": "ADForest",
-      "Value": "Current"
-    }
+    "ADDomain": { "Name": "ADDomain", "Value": "Current" },
+    "ADForest": { "Name": "ADForest", "Value": "Current" }
   },
   "ThreadCount": 4,
   "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n# Set Preference Variables\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n$ProgressPreference = \"SilentlyContinue\"\r\n\r\n# -----------------------------------------------------\r\n# Build ListView Column Lookup Table\r\n#\r\n# Reference Columns by Name Incase Column Order Changes\r\n# -----------------------------------------------------\r\n$Columns = @{\r\n}\r\n$ListViewItem.ListView.Columns | ForEach-Object -Process {\r\n  $Columns.Add($PSItem.Text, $PSItem.Index)\r\n}\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$Columns[\"Status Message\"]].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Pause)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Pause\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  While ($SyncedHash.Pause)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Processing\"\r\n$ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n$UserName = $ListViewItem.SubItems[$Columns[\"UserName\"]].Text\r\n\r\nTry\r\n{\r\n  # Get Current Domain / Forest\r\n  If ($ADForest -eq \"Domain\")\r\n  {\r\n    If ($ADDomain -eq \"Current\")\r\n    {\r\n      $GetADDomain = Get-MyADDomain -ErrorAction SilentlyContinue\r\n    }\r\n    Else\r\n    {\r\n      $GetADDomain = Get-MyADDomain -Name $ADDomain -ErrorAction SilentlyContinue\r\n    }\r\n    If (-not [String]::IsNullOrEmpty($GetADDomain.Name))\r\n    {\r\n      $SearchRoot = \"LDAP://$(\"dc=$(($GetADDomain.Name -split \u0027\\.\u0027) -join \u0027,dc=\u0027)\")\"\r\n      $GetADDomain.Dispose()\r\n    }\r\n  }\r\n  Else\r\n  {\r\n    If ($ADDomain -eq \"Current\")\r\n    {\r\n      $GetADForget = Get-MyADForest -ErrorAction SilentlyContinue\r\n    }\r\n    Else\r\n    {\r\n      $GetADForget = Get-MyADForest -Name $ADForest -ErrorAction SilentlyContinue\r\n    }\r\n    If (-not [String]::IsNullOrEmpty($GetADForget.Name))\r\n    {\r\n      $SearchRoot = \"GC://$($GetADForget.Name)\"\r\n      $GetADForget.Dispose()\r\n    }\r\n  }\r\n  \r\n  # Check Domain / Forest Found\r\n  If ([String]::IsNullOrEmpty($SearchRoot))\r\n  {\r\n    $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"Unable to Get Current AD Domain / Forest\"\r\n    $WasSuccess = $False\r\n  }\r\n  Else\r\n  {\r\n    $LDAPFilter = \"(\u0026(objectClass=user)(objectCategory=person)(sAMAccountType=805306368)(sAMAccountName={0}))\" -f $UserName\r\n    $PropertiesToLoad = @(\"name\", \"canonicalName\", \"userPrincipalName\", \"mail\", \"lastLogonTimestamp\", \"pwdLastSet\", \"userAccountControl\", \"distinguishedName\")\r\n    $ADObject = Get-MyADObject -SearchRoot $SearchRoot -SearchScope Subtree -LDAPFilter $LDAPFilter -PropertiesToLoad $PropertiesToLoad -ErrorAction SilentlyContinue | Select-Object -First 1\r\n    If ([String]::IsNullOrEmpty($ADObject.Path))\r\n    {\r\n      $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"Computer Not Found in AD Forest\"\r\n      $WasSuccess = $False\r\n    }\r\n    Else\r\n    {\r\n      # User Info\r\n      $ListViewItem.SubItems[$Columns[\"userPrincipalName\"]].Text = $ADObject.Properties[\"userPrincipalName\"][0]\r\n      $ListViewItem.SubItems[$Columns[\"E-Mail\"]].Text = $ADObject.Properties[\"mail\"][0]\r\n      \r\n      # CanonicalName\r\n      $CanonicalName = $ADObject.Properties[\"canonicalName\"][0]\r\n      $ListViewItem.SubItems[$Columns[\"canonicalName\"]].Text = $CanonicalName\r\n      \r\n      # distinguishedName\r\n      $ListViewItem.SubItems[$Columns[\"distinguishedName\"]].Text = $ADObject.Properties[\"distinguishedName\"][0]\r\n      \r\n      # Domain\r\n      $Domain = $CanonicalName -split \"/\" | Select-Object -First 1\r\n      $ListViewItem.SubItems[$Columns[\"Domain\"]].Text = $Domain\r\n      \r\n      # Zero Hour\r\n      $ZeroHour = [DateTime]::New(1601, 1, 1, 0, 0, 0)\r\n      \r\n      # Last Logon TimeStamp\r\n      $LastLogonTimestamp = $ADObject.Properties[\"lastLogonTimestamp\"][0]\r\n      $LastLogonTimeStampDate = $ZeroHour.AddTicks($LastLogonTimestamp)\r\n      $ListViewItem.SubItems[$Columns[\"Last Logon\"]].Text = $LastLogonTimeStampDate.ToString(\"G\")\r\n      \r\n      # Password Last Set\r\n      $PwdLastSet = $ADObject.Properties[\"pwdLastSet\"][0]\r\n      $PwdLastSetDate = $ZeroHour.AddTicks($PwdLastSet)\r\n      $ListViewItem.SubItems[$Columns[\"PwdLastSet\"]].Text = $PwdLastSetDate.ToString(\"G\")\r\n      \r\n      # User Account Control Flags\r\n      $UserAccountControl = $ADObject.Properties[\"userAccountControl\"][0]\r\n      $ListViewItem.SubItems[$Columns[\"UserAccountControl\"]].Text = \"0$($UserAccountControl)\"\r\n      $ListViewItem.SubItems[$Columns[\"PwdNoChange\"]].Text = (($UserAccountControl -band 64) -ne 0)\r\n      $ListViewItem.SubItems[$Columns[\"PwdNoExpire\"]].Text = (($UserAccountControl -band 65536) -ne 0)\r\n      $ListViewItem.SubItems[$Columns[\"PwdExpired\"]].Text = (($UserAccountControl -band 8388608) -ne 0)\r\n      $ListViewItem.SubItems[$Columns[\"Locked Out\"]].Text = (($UserAccountControl -band 16) -ne 0)\r\n      $ListViewItem.SubItems[$Columns[\"Disabled\"]].Text = (($UserAccountControl -band 2) -ne 0)\r\n    }\r\n  }\r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Completed\"\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"\"\r\n  $ListViewItem.Tag = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Error\"\r\n}\r\n\r\nExit\r\n\r\n\r\n\r\n\r\n\r\n"
@@ -706,18 +707,9 @@ $GraphAPIDevice = @'
     }
   },
   "Variables": {
-    "ClientID": {
-      "Name": "ClientID",
-      "Value": "*"
-    },
-    "ClientSecret": {
-      "Name": "ClientSecret",
-      "Value": "*"
-    },
-    "TenantID": {
-      "Name": "TenantID",
-      "Value": "*"
-    }
+    "ClientID": { "Name": "ClientID", "Value": "*" },
+    "ClientSecret": { "Name": "ClientSecret", "Value": "*" },
+    "TenantID": { "Name": "TenantID", "Value": "*" }
   },
   "ThreadCount": 4,
   "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n# Set Preference Variables\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n$ProgressPreference = \"SilentlyContinue\"\r\n\r\n# -----------------------------------------------------\r\n# Build ListView Column Lookup Table\r\n#\r\n# Reference Columns by Name Incase Column Order Changes\r\n# -----------------------------------------------------\r\n$Columns = @{\r\n}\r\n$ListViewItem.ListView.Columns | ForEach-Object -Process {\r\n  $Columns.Add($PSItem.Text, $PSItem.Index)\r\n}\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$Columns[\"Status Message\"]].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Pause)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Pause\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  While ($SyncedHash.Pause)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Processing\"\r\n$DisplayName = $ListViewItem.SubItems[$Columns[\"DisplayName\"]].Text\r\n\r\nTry\r\n{\r\n  $AuthToken = Get-MyOAuthApplicationToken -MyTenantID $TenantID -MyClientID $ClientID -MyClientSecret $ClientSecret\r\n  If ($AuthToken.Expires_In -eq 0)\r\n  {\r\n    $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"Unable to get AuthToken\"\r\n    $WasSuccess = $False\r\n  }\r\n  Else\r\n  {\r\n    $Resource = (\"/devices?`$filter=displayName eq \u0027{0}\u0027\u0026`$top=1\u0026`$select=id,displayname,deviceId,deviceOwnership,trustType,manufacturer,model,operatingSystem,operatingSystemVersion,accountEnabled\" -f $DisplayName)\r\n    $Device = Get-MyGQuery -AuthToken $AuthToken -Resource $Resource -ErrorAction SilentlyContinue\r\n    If ([String]::IsNullOrEmpty($Device.ID))\r\n    {\r\n      $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"No Device Found in Azure AD / Entra ID\"\r\n      $WasSuccess = $False\r\n    }\r\n    Else\r\n    {\r\n      $ListViewItem.SubItems[$Columns[\"DisplayName\"]].Text = $Device.DisplayName\r\n      $ListViewItem.SubItems[$Columns[\"ID\"]].Text = $Device.ID\r\n      $ListViewItem.SubItems[$Columns[\"DeviceID\"]].Text = $Device.DeviceID\r\n      $ListViewItem.SubItems[$Columns[\"DeviceOwnership\"]].Text = $Device.DeviceOwnership\r\n      $ListViewItem.SubItems[$Columns[\"TrustType\"]].Text = $Device.TrustType\r\n      $ListViewItem.SubItems[$Columns[\"Manufacturer\"]].Text = $Device.Manufacturer\r\n      $ListViewItem.SubItems[$Columns[\"Model\"]].Text = $Device.Model\r\n      $ListViewItem.SubItems[$Columns[\"OperatingSystem\"]].Text = $Device.OperatingSystem\r\n      $ListViewItem.SubItems[$Columns[\"OperatingSystemVersion\"]].Text = $Device.OperatingSystemVersion\r\n      $ListViewItem.SubItems[$Columns[\"AccountEnabled\"]].Text = $Device.AccountEnabled\r\n    }\r\n  }\r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Completed\"\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"\"\r\n  $ListViewItem.Tag = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Error\"\r\n}\r\n\r\nExit\r\n\r\n\r\n\r\n\r\n"
@@ -753,24 +745,99 @@ $GraphAPIUser = @'
     }
   },
   "Variables": {
-    "ClientID": {
-      "Name": "ClientID",
-      "Value": "*"
-    },
-    "ClientSecret": {
-      "Name": "ClientSecret",
-      "Value": "*"
-    },
-    "TenantID": {
-      "Name": "TenantID",
-      "Value": "*"
-    }
+    "ClientID": { "Name": "ClientID", "Value": "*" },
+    "ClientSecret": { "Name": "ClientSecret", "Value": "*" },
+    "TenantID": { "Name": "TenantID", "Value": "*" }
   },
   "ThreadCount": 4,
-  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n# Set Preference Variables\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n$ProgressPreference = \"SilentlyContinue\"\r\n\r\n# -----------------------------------------------------\r\n# Build ListView Column Lookup Table\r\n#\r\n# Reference Columns by Name Incase Column Order Changes\r\n# -----------------------------------------------------\r\n$Columns = @{\r\n}\r\n$ListViewItem.ListView.Columns | ForEach-Object -Process {\r\n  $Columns.Add($PSItem.Text, $PSItem.Index)\r\n}\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$Columns[\"Status Message\"]].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Pause)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Pause\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  While ($SyncedHash.Pause)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Processing\"\r\n$UserPrincipalName = $ListViewItem.SubItems[$Columns[\"UserPrincipalName\"]].Text\r\n\r\nTry\r\n{\r\n  $AuthToken = Get-MyOAuthApplicationToken -MyTenantID $TenantID -MyClientID $ClientID -MyClientSecret $ClientSecret\r\n  If ($AuthToken.Expires_In -eq 0)\r\n  {\r\n    $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"Unable to get AuthToken\"\r\n    $WasSuccess = $False\r\n  }\r\n  Else\r\n  {\r\n    $Resource = (\"/users/$($UserPrincipalName)?`$top=1\u0026`$select=id,displayname,mail,givenName,surname,accountEnabled\" -f $DisplayName)\r\n    $Device = Get-MyGQuery -AuthToken $AuthToken -Resource $Resource -ErrorAction SilentlyContinue\r\n    If ([String]::IsNullOrEmpty($Device.ID))\r\n    {\r\n      $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"No Device Found in Azure AD / Entra ID\"\r\n      $WasSuccess = $False\r\n    }\r\n    Else\r\n    {\r\n      $ListViewItem.SubItems[$Columns[\"ID\"]].Text = $Device.ID\r\n      $ListViewItem.SubItems[$Columns[\"E-Mail\"]].Text = $Device.Mail\r\n      $ListViewItem.SubItems[$Columns[\"DisplayName\"]].Text = $Device.DisplayName\r\n      $ListViewItem.SubItems[$Columns[\"FirstName\"]].Text = $Device.GivenName\r\n      $ListViewItem.SubItems[$Columns[\"Surname\"]].Text = $Device.Surname\r\n      $ListViewItem.SubItems[$Columns[\"AccountEnabled\"]].Text = $Device.AccountEnabled\r\n    }\r\n  }\r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n  \r\n  Write-Host -Object ($($Error[0].Exception.Message))\r\n  Write-Host -Object (($Error[0].InvocationInfo.Line).Trim())\r\n  Write-Host -Object ($Error[0].InvocationInfo.ScriptLineNumber)\r\n}\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Completed\"\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"\"\r\n  $ListViewItem.Tag = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Error\"\r\n}\r\n\r\nExit\r\n\r\n\r\n\r\n\r\n"
+  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n# Set Preference Variables\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n$ProgressPreference = \"SilentlyContinue\"\r\n\r\n# -----------------------------------------------------\r\n# Build ListView Column Lookup Table\r\n#\r\n# Reference Columns by Name Incase Column Order Changes\r\n# -----------------------------------------------------\r\n$Columns = @{\r\n}\r\n$ListViewItem.ListView.Columns | ForEach-Object -Process {\r\n  $Columns.Add($PSItem.Text, $PSItem.Index)\r\n}\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$Columns[\"Status Message\"]].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Pause)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Pause\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  While ($SyncedHash.Pause)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Processing\"\r\n$UserPrincipalName = $ListViewItem.SubItems[$Columns[\"UserPrincipalName\"]].Text\r\n\r\nTry\r\n{\r\n  $AuthToken = Get-MyOAuthApplicationToken -MyTenantID $TenantID -MyClientID $ClientID -MyClientSecret $ClientSecret\r\n  If ($AuthToken.Expires_In -eq 0)\r\n  {\r\n    $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"Unable to get AuthToken\"\r\n    $WasSuccess = $False\r\n  }\r\n  Else\r\n  {\r\n    $Resource = \"/users/$($UserPrincipalName)?`$select=id,displayname,mail,givenName,surname,accountEnabled\"\r\n    $User = Get-MyGQuery -AuthToken $AuthToken -Resource $Resource -ErrorAction SilentlyContinue\r\n    If ([String]::IsNullOrEmpty($User.ID))\r\n    {\r\n      $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"No Device Found in Azure AD / Entra ID\"\r\n      $WasSuccess = $False\r\n    }\r\n    Else\r\n    {\r\n      $ListViewItem.SubItems[$Columns[\"ID\"]].Text = $User.ID\r\n      $ListViewItem.SubItems[$Columns[\"E-Mail\"]].Text = $User.Mail\r\n      $ListViewItem.SubItems[$Columns[\"DisplayName\"]].Text = $User.DisplayName\r\n      $ListViewItem.SubItems[$Columns[\"FirstName\"]].Text = $User.GivenName\r\n      $ListViewItem.SubItems[$Columns[\"Surname\"]].Text = $User.Surname\r\n      $ListViewItem.SubItems[$Columns[\"AccountEnabled\"]].Text = $User.AccountEnabled\r\n    }\r\n  }\r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Completed\"\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"\"\r\n  $ListViewItem.Tag = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Error\"\r\n}\r\n\r\nExit\r\n\r\n\r\n\r\n\r\n"
 }
 '@
 #endregion $GraphAPIUser
+
+#region $MgGraphDevice
+$MgGraphDevice = @'
+{
+  "Description": "This is a Sample PIL Thread Configuration to demomstrate how to Query Graph API for Informaiton of Device Resources.",
+  "ColumnNames": [
+    "DisplayName",
+    "ID",
+    "DeviceID",
+    "DeviceOwnership",
+    "TrustType",
+    "Manufacturer",
+    "Model",
+    "operatingSystem",
+    "OperatingSystemVersion",
+    "AccountEnabled",
+    "Date/Time",
+    "Status Message",
+    "Error Message"
+  ],
+  "Modules": {},
+  "Functions": {},
+  "Variables": {},
+  "ThreadCount": 4,
+  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n# Set Preference Variables\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n$ProgressPreference = \"SilentlyContinue\"\r\n\r\n# -----------------------------------------------------\r\n# Build ListView Column Lookup Table\r\n#\r\n# Reference Columns by Name Incase Column Order Changes\r\n# -----------------------------------------------------\r\n$Columns = @{\r\n}\r\n$ListViewItem.ListView.Columns | ForEach-Object -Process {\r\n  $Columns.Add($PSItem.Text, $PSItem.Index)\r\n}\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$Columns[\"Status Message\"]].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Pause)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Pause\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  While ($SyncedHash.Pause)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Processing\"\r\n$DisplayName = $ListViewItem.SubItems[$Columns[\"DisplayName\"]].Text\r\n\r\nTry\r\n{\r\n  $Resource = (\"/beta/devices?`$filter=displayName eq \u0027{0}\u0027\u0026`$top=1\u0026`$select=id,displayname,deviceId,deviceOwnership,trustType,manufacturer,model,operatingSystem,operatingSystemVersion,accountEnabled\" -f $DisplayName)\r\n  $Device = Invoke-MgGraphRequest -Uri $Resource -ErrorAction SilentlyContinue\r\n  If ([String]::IsNullOrEmpty($Device.Value.ID))\r\n  {\r\n    $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"No Device Found in Azure AD / Entra ID\"\r\n    $WasSuccess = $False\r\n  }\r\n  Else\r\n  {\r\n    $ListViewItem.SubItems[$Columns[\"DisplayName\"]].Text = $Device.Value.DisplayName\r\n    $ListViewItem.SubItems[$Columns[\"ID\"]].Text = $Device.Value.ID\r\n    $ListViewItem.SubItems[$Columns[\"DeviceID\"]].Text = $Device.Value.DeviceID\r\n    $ListViewItem.SubItems[$Columns[\"DeviceOwnership\"]].Text = $Device.Value.DeviceOwnership\r\n    $ListViewItem.SubItems[$Columns[\"TrustType\"]].Text = $Device.Value.TrustType\r\n    $ListViewItem.SubItems[$Columns[\"Manufacturer\"]].Text = $Device.Value.Manufacturer\r\n    $ListViewItem.SubItems[$Columns[\"Model\"]].Text = $Device.Value.Model\r\n    $ListViewItem.SubItems[$Columns[\"OperatingSystem\"]].Text = $Device.Value.OperatingSystem\r\n    $ListViewItem.SubItems[$Columns[\"OperatingSystemVersion\"]].Text = $Device.Value.OperatingSystemVersion\r\n    $ListViewItem.SubItems[$Columns[\"AccountEnabled\"]].Text = $Device.Value.AccountEnabled\r\n  }\r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Completed\"\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"\"\r\n  $ListViewItem.Tag = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Error\"\r\n}\r\n\r\nExit\r\n\r\n\r\n\r\n\r\n\r\n\r\n"
+}
+'@
+#endregion $MgGraphDevice
+
+#region $MgGraphUser
+$MgGraphUser = @'
+{
+  "Description": "This is a Sample PIL Thread Configuration to demomstrate how to Query Graph API for Informaiton of User Resources.",
+  "ColumnNames": [
+    "UserPrincipalName",
+    "ID",
+    "E-Mail",
+    "DisplayName",
+    "FirstName",
+    "Surname",
+    "AccountEnabled",
+    "Date/Time",
+    "Status Message",
+    "Error Message"
+  ],
+  "Modules": {},
+  "Functions": {},
+  "Variables": {},
+  "ThreadCount": 4,
+  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n# Set Preference Variables\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n$ProgressPreference = \"SilentlyContinue\"\r\n\r\n# -----------------------------------------------------\r\n# Build ListView Column Lookup Table\r\n#\r\n# Reference Columns by Name Incase Column Order Changes\r\n# -----------------------------------------------------\r\n$Columns = @{\r\n}\r\n$ListViewItem.ListView.Columns | ForEach-Object -Process {\r\n  $Columns.Add($PSItem.Text, $PSItem.Index)\r\n}\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$Columns[\"Status Message\"]].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Pause)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Pause\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  While ($SyncedHash.Pause)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Processing\"\r\n$UserPrincipalName = $ListViewItem.SubItems[$Columns[\"UserPrincipalName\"]].Text\r\n\r\nTry\r\n{\r\n  $Resource = \"/beta/users/$($UserPrincipalName)?`$select=id,displayname,mail,givenName,surname,accountEnabled\"\r\n  $User = Invoke-MgGraphRequest -Uri $Resource -ErrorAction SilentlyContinue\r\n  If ([String]::IsNullOrEmpty($User.ID))\r\n  {\r\n    $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"No Device Found in Azure AD / Entra ID\"\r\n    $WasSuccess = $False\r\n  }\r\n  Else\r\n  {\r\n    $ListViewItem.SubItems[$Columns[\"ID\"]].Text = $User.ID\r\n    $ListViewItem.SubItems[$Columns[\"E-Mail\"]].Text = $User.Mail\r\n    $ListViewItem.SubItems[$Columns[\"DisplayName\"]].Text = $User.DisplayName\r\n    $ListViewItem.SubItems[$Columns[\"FirstName\"]].Text = $User.GivenName\r\n    $ListViewItem.SubItems[$Columns[\"Surname\"]].Text = $User.Surname\r\n    $ListViewItem.SubItems[$Columns[\"AccountEnabled\"]].Text = $User.AccountEnabled\r\n  }\r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Completed\"\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"\"\r\n  $ListViewItem.Tag = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Error\"\r\n}\r\n\r\nExit\r\n\r\n\r\n\r\n\r\n\r\n\r\n"
+}
+'@
+#endregion $MgGraphUser
+
+#region $AzADUser
+$AzADUser = @'
+{
+  "Description": "This is a Sample PIL Thread Configuration to demomstrate how to Azure/EntraID for Informaiton of User Resources.",
+  "ColumnNames": [
+    "UserPrincipalName",
+    "ID",
+    "E-Mail",
+    "DisplayName",
+    "FirstName",
+    "Surname",
+    "AccountEnabled",
+    "Date/Time",
+    "Status Message",
+    "Error Message"
+  ],
+  "Modules": {
+    "Az.Resources": {
+      "Location": "All Users",
+      "Name": "Az.Resources",
+      "Version": "7.8.1"
+    }
+  },
+  "Functions": {},
+  "Variables": {},
+  "ThreadCount": 4,
+  "ThreadScript": "\u003c#\r\n  .SYNOPSIS\r\n    Sample Runspace Pool Thread Script\r\n  .DESCRIPTION\r\n    Sample Runspace Pool Thread Script\r\n  .PARAMETER ListViewItem\r\n    ListViewItem Passed to the Thread Script\r\n\r\n    This Paramter is Required in your Thread Script\r\n  .EXAMPLE\r\n    Test-Script.ps1 -ListViewItem $ListViewItem\r\n  .NOTES\r\n    Sample Thread Script\r\n\r\n   -------------------------\r\n   ListViewItem Status Icons\r\n   -------------------------\r\n   $GoodIcon = Solid Green Circle\r\n   $BadIcon = Solid Red Circle\r\n   $InfoIcon = Solid Blue Circle\r\n   $CheckIcon = Checkmark\r\n   $ErrorIcon = Red X\r\n   $UpIcon = Green up Arrow \r\n   $DownIcon = Red Down Arrow\r\n\r\n#\u003e\r\n[CmdletBinding()]\r\nParam (\r\n  [parameter(Mandatory = $True)]\r\n  [System.Windows.Forms.ListViewItem]$ListViewItem\r\n)\r\n\r\n# Set Preference Variables\r\n$ErrorActionPreference = \"Stop\"\r\n$VerbosePreference = \"SilentlyContinue\"\r\n$ProgressPreference = \"SilentlyContinue\"\r\n\r\n# -----------------------------------------------------\r\n# Build ListView Column Lookup Table\r\n#\r\n# Reference Columns by Name Incase Column Order Changes\r\n# -----------------------------------------------------\r\n$Columns = @{\r\n}\r\n$ListViewItem.ListView.Columns | ForEach-Object -Process {\r\n  $Columns.Add($PSItem.Text, $PSItem.Index)\r\n}\r\n\r\n# ------------------------------------------------\r\n# Check if Thread was Already Completed and Exit\r\n# ------------------------------------------------\r\nIf ($ListViewItem.SubItems[$Columns[\"Status Message\"]].Text -eq \"Completed\")\r\n{\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  Exit\r\n}\r\n\r\n# ----------------------------------------------------\r\n# Check if Threads are Paused and Update Thread Status\r\n# ----------------------------------------------------\r\nIf ($SyncedHash.Pause)\r\n{\r\n  # Set Paused Status\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Pause\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  While ($SyncedHash.Pause)\r\n  {\r\n    [System.Threading.Thread]::Sleep(100)\r\n  }\r\n}\r\n\r\n# -----------------------------------------------------\r\n# Check For Termination and Update Thread Status\r\n# -----------------------------------------------------\r\nIf ($SyncedHash.Terminate)\r\n{\r\n  # Set Terminated Status and Exit Thread\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Terminated\"\r\n  $ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\n  $ListViewItem.ImageKey = $InfoIcon\r\n  Exit\r\n}\r\n\r\n# Sucess Default Exit Status\r\n$WasSuccess = $True\r\n$ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Processing\"\r\n$UserPrincipalName = $ListViewItem.SubItems[$Columns[\"UserPrincipalName\"]].Text\r\n\r\nTry\r\n{\r\n  $User = Get-AzADUser -UserPrincipalName $UserPrincipalName -Select id, displayname, mail, givenName, surname, accountEnabled\r\n  If ([String]::IsNullOrEmpty($User.ID))\r\n  {\r\n    $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"No Device Found in Azure AD / Entra ID\"\r\n    $WasSuccess = $False\r\n  }\r\n  Else\r\n  {\r\n    $ListViewItem.SubItems[$Columns[\"ID\"]].Text = $User.ID\r\n    $ListViewItem.SubItems[$Columns[\"E-Mail\"]].Text = $User.Mail\r\n    $ListViewItem.SubItems[$Columns[\"DisplayName\"]].Text = $User.DisplayName\r\n    $ListViewItem.SubItems[$Columns[\"FirstName\"]].Text = $User.GivenName\r\n    $ListViewItem.SubItems[$Columns[\"Surname\"]].Text = $User.Surname\r\n    $ListViewItem.SubItems[$Columns[\"AccountEnabled\"]].Text = $User.AccountEnabled\r\n  }\r\n}\r\nCatch\r\n{\r\n  # Set Error Message / Thread Failed\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = $PSItem.ToString()\r\n  $WasSuccess = $False\r\n}\r\n\r\n# Set Final Date / Time and Update Status\r\n$ListViewItem.SubItems[$Columns[\"Date/Time\"]].Text = [DateTime]::Now.ToString(\"G\")\r\nIf ($WasSuccess)\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $GoodIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Completed\"\r\n  $ListViewItem.SubItems[$Columns[\"Error Message\"]].Text = \"\"\r\n  $ListViewItem.Tag = \"Completed\"\r\n}\r\nElse\r\n{\r\n  # Return Success\r\n  $ListViewItem.ImageKey = $BadIcon\r\n  $ListViewItem.SubItems[$Columns[\"Status Message\"]].Text = \"Error\"\r\n}\r\n\r\nExit\r\n\r\n\r\n\r\n\r\n\r\n\r\n"
+}
+'@
+#endregion $AzADUser
 
 #region Starter Script
 $StarterConfig = @'
@@ -1054,6 +1121,7 @@ function New-MenuItem()
     [System.Drawing.ContentAlignment]$Alignment = "MiddleCenter",
     [Object]$Tag,
     [Switch]$Disable,
+    [Switch]$Hide,
     [Switch]$Check,
     [Switch]$ClickOnCheck,
     [System.Windows.Forms.Keys]$ShortcutKeys = "None",
@@ -1099,7 +1167,7 @@ function New-MenuItem()
   $TempMenuItem.CheckOnClick = $ClickOnCheck.IsPresent
   $TempMenuItem.DisplayStyle = $DisplayStyle
   $TempMenuItem.Enabled = (-not $Disable.IsPresent)
-
+  $TempMenuItem.Visible = (-not $Hide.IsPresent)
   $TempMenuItem.BackColor = $BackColor
   $TempMenuItem.ForeColor = $ForeColor
   $TempMenuItem.Font = $Font
@@ -7963,6 +8031,66 @@ Function Display-InitiliazePILUtility()
   
   Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Modules Discovered" -Value ([MyRuntime]::Modules.Count)
   
+  $RichTextBox.SelectionIndent = 30
+  # Check for Az.Accounts
+  If ([MyRuntime]::Modules.ContainsKey("Az.Accounts"))
+  {
+    If ([MyRuntime]::Modules["Az.Accounts"].Version -eq [MyRuntime]::AzVersion)
+    {
+      $PILTopMenuStrip.Items["CloudLogon"].Visible = $True
+      $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].Enabled = $True
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Found Az.Accounts Version $([MyRuntime]::AzVersion)" -ValueFore ([MyConfig]::Colors.TextFore)
+    }
+    else
+    {
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "WARNING" -TextFore ([MyConfig]::Colors.TextWarn) -Value "Incorrect Az.Accounts Version was Found" -ValueFore ([MyConfig]::Colors.TextFore)
+    }
+  }
+  else
+  {
+    Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "WARNING" -TextFore ([MyConfig]::Colors.TextWarn) -Value "Az.Accounts Version $([MyRuntime]::AzVersion) not Found" -ValueFore ([MyConfig]::Colors.TextFore)
+  }
+  
+  # Check for Microsoft.Graph.Authentication
+  If ([MyRuntime]::Modules.ContainsKey("Microsoft.Graph.Authentication"))
+  {
+    If ([MyRuntime]::Modules["Microsoft.Graph.Authentication"].Version -eq [MyRuntime]::GraphVersion)
+    {
+      $PILTopMenuStrip.Items["CloudLogon"].Visible = $True
+      $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].Enabled = $True
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Found Microsoft.Graph.Authentication Version $([MyRuntime]::GraphVersion)" -ValueFore ([MyConfig]::Colors.TextFore)
+    }
+    else
+    {
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "WARNING" -TextFore ([MyConfig]::Colors.TextWarn) -Value "Incorrect Microsoft.Graph.Authentication Version $([MyRuntime]::GraphVersion) was Found" -ValueFore ([MyConfig]::Colors.TextFore)
+    }
+  }
+  else
+  {
+    Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "WARNING" -TextFore ([MyConfig]::Colors.TextWarn) -Value "Microsoft.Graph.Authentication Version $([MyRuntime]::GraphVersion) not Found" -ValueFore ([MyConfig]::Colors.TextFore)
+  }
+  
+  if ($PILTopMenuStrip.Items["CloudLogon"].Visible)
+  {
+    Try
+    {
+      $TmpRegKey = Get-Item -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Policies\PassportForWork"
+      $TmpTenantID = $TmpRegKey.GetSubKeyNames() | Where-Object -FilterScript { $PSItem -match "^[\w\d]{8}-(?:[\w\d]{4}-){3}[\w\d]{12}`$" } | Select-Object -First 1
+      if ([String]::IsNullOrEmpty($TmpTenantID))
+      {
+        [MyRuntime]::TenantID = $Null
+      }
+      else
+      {
+        [MyRuntime]::TenantID = $TmpTenantID
+      }
+    }
+    Catch
+    {
+      [MyRuntime]::TenantID = $Null
+    }
+  }
+  
   If (-not [String]::IsNullOrEmpty($ConfigFile))
   {
     $HashTable = @{"ShowHeader" = $False; "ConfigFile" = $ConfigFile }
@@ -8209,7 +8337,7 @@ Function Load-PILConfigFIleXml()
           
           If ([MyRuntime]::Modules.ContainsKey($Module.Name))
           {
-            If ([Version]::New([MyRuntime]::Modules[$Module.Name].Version) -lt [Version]::New($Module.Version))
+            If ([Version]::New([MyRuntime]::Modules[$Module.Name].Version) -ne [Version]::New($Module.Version))
             {
               $Response = Get-UserResponse -Title "Incorrect Module Version" -Message "The Module $($Module.Name) Version $($Module.Version) was not Found would you like to Install it to $($TmpInallMsg)?" -ButtonLeft Yes -ButtonRight No -ButtonDefault Yes -Icon ([System.Drawing.SystemIcons]::Question)
               If ($Response.Success)
@@ -8529,7 +8657,7 @@ Function Load-PILConfigFIleJson()
           
           If ([MyRuntime]::Modules.ContainsKey($Module.Name))
           {
-            If ([Version]::New([MyRuntime]::Modules[$Module.Name].Version) -lt [Version]::New($Module.Value.Version))
+            If ([Version]::New([MyRuntime]::Modules[$Module.Name].Version) -ne [Version]::New($Module.Value.Version))
             {
               $Response = Get-UserResponse -Title "Incorrect Module Version" -Message "The Module $($Module.Name) Version $($Module.Value.Version) was not Found would you like to Install it to $($TmpInallMsg)?" -ButtonLeft Yes -ButtonRight No -ButtonDefault Yes -Icon ([System.Drawing.SystemIcons]::Question)
               If ($Response.Success)
@@ -9811,6 +9939,7 @@ Function Monitor-RunspacePoolThreads ()
   # Re-Enable Main Menu Items
   $PILTopMenuStrip.Items["AddItems"].Enabled = $True
   $PILTopMenuStrip.Items["Configure"].Enabled = $True
+  $PILTopMenuStrip.Items["CloudLogon"].Enabled = $True
   $PILTopMenuStrip.Items["ProcessItems"].Enabled = $True
   $PILTopMenuStrip.Items["ListData"].Enabled = $True
   
@@ -11156,6 +11285,18 @@ function Update-ThreadConfiguration ()
             $ConfigName = "Get-DomainUsers"
             Break
           }
+          "MgGraphDevice"
+          {
+            $ConfigObject = $MgGraphDevice
+            $ConfigName = "MgGraph Device"
+            Break
+          }
+          "MgGraphUser"
+          {
+            $ConfigObject = $MgGraphUser
+            $ConfigName = "MgGraph User"
+            Break
+          }
           "GraphAPIDevice"
           {
             $ConfigObject = $GraphAPIDevice
@@ -11166,6 +11307,12 @@ function Update-ThreadConfiguration ()
           {
             $ConfigObject = $GraphAPIUser
             $ConfigName = "Graph API User"
+            Break
+          }
+          "AzUser"
+          {
+            $ConfigObject = $AzADUser
+            $ConfigName = "Get-AzADUser"
             Break
           }
         }
@@ -11214,15 +11361,25 @@ function Update-ThreadConfiguration ()
   New-MenuSeparator -Menu $DropDownMenu
   (New-MenuItem -Menu $DropDownMenu -Text "Get Domain Computers" -Name "Sample" -Tag "GetDomainComps" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   (New-MenuItem -Menu $DropDownMenu -Text "Get Domain Users" -Name "Sample" -Tag "GetDomainUsers" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+  if ([MyRuntime]::GraphLogon)
+  {
+    New-MenuSeparator -Menu $DropDownMenu
+    (New-MenuItem -Menu $DropDownMenu -Text "MgGraph Devices" -Name "Sample" -Tag "MgGraphDevice" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+    (New-MenuItem -Menu $DropDownMenu -Text "MgGraph User" -Name "Sample" -Tag "MgGraphUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+  }
   New-MenuSeparator -Menu $DropDownMenu
   (New-MenuItem -Menu $DropDownMenu -Text "Graph API Devices" -Name "Sample" -Tag "GraphAPIDevice" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   (New-MenuItem -Menu $DropDownMenu -Text "Graph API User" -Name "Sample" -Tag "GraphAPIUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+  if ([MyRuntime]::AzLogon)
+  {
+    New-MenuSeparator -Menu $DropDownMenu
+    (New-MenuItem -Menu $DropDownMenu -Text "Az Get-AzADUser" -Name "Sample" -Tag "AzUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+    New-MenuSeparator -Menu $DropDownMenu
+  }
   New-MenuSeparator -Menu $DropDownMenu
   (New-MenuItem -Menu $DropDownMenu -Text "PIL Starter Config" -Name "Sample" -Tag "StarterConfig" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   New-MenuSeparator -Menu $DropDownMenu
   (New-MenuItem -Menu $DropDownMenu -Text "PIL Demo Script" -Name "Sample" -Tag "SampleDemo" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
-
-  
   
   $PILTCDescriptionGroupBox.ClientSize = [System.Drawing.Size]::New(($PILTCDescriptionGroupBox.ClientSize.Width), (([MyConfig]::Font.Height * 4) + [MyConfig]::FormSpacer))
 
@@ -12445,6 +12602,22 @@ AAAAAAAAAAGsQcAHrEGAA6xBgAOsQYADrEGAA6xBgAOsQYADrEGAA6xBAAGsQQAArEEAAKxBAAGsQQAB
 #endregion ******** $Trash16Icon ********
 $PILSmallImageList.Images.Add("Trash16Icon", [System.Drawing.Icon]::New([System.IO.MemoryStream]::New([System.Convert]::FromBase64String($Trash16Icon))))
 
+#region ******** $Cloud16Icon ********
+$Cloud16Icon = @"
+AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD+pJBp/aqWjv6cgx3+nIQr/aqVl/6fhCIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/q2b2//JwP/+uKnF/rOiyf/L
+wv/9oolw/p2DFgAAAAAAAAAAAAAAAAAAAAAAAAAA/pt/CP6um6/+pY9y/quYrf66rPz+u63//sO3///Nw///1c7+/8i+//6you3+p5B9/qOKYP+chBT9sJpN/sS1t/68rKj/yb7v/9TN///KwP//0sr//sS5///R
+yf//0Mf//9LK///Wz///1Mz//9fP//7Euf/9ppGB/q+ZSP7KvKb+0cXd/+Pd///Wz///2NH//9fQ///Vzv/+x73//se9///Mw///08v//9rU///Qx/7+po1V/puAAQAAAAD+nIEP/+zn9//g2v//5+P//97Z///g
+2///19D//9jS///Y0f//29X//+Tf///s5//+1szV/qmWRAAAAAAAAAAA/5yJEP7Gt5L+s55i/s/Cwf7Pwcn/49z8/9bP///X0f//19D//9nS///f2P//5uD7/q+YVwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAD9sJhT/+3q///Vzv//5+L//+La9P/Z0v//5+P//runmv+YfAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/qOMNv/y8P//9/X//rytg/6bhyb/4dvu//Ty//7KvKcAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAP+YhQP+taF7/reic/+ZgwYAAAAA/rGdTv6/rY3+oYwsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAA//+sQf//rEH//6xB/A+sQfwHrEHAAKxBAACsQQAArEGAAaxBgAOsQfgDrEH4B6xB+EesQf//rEH//6xB//+sQQ==
+"@
+#endregion ******** $Cloud16Icon ********
+$PILSmallImageList.Images.Add("Cloud16Icon", [System.Drawing.Icon]::New([System.IO.MemoryStream]::New([System.Convert]::FromBase64String($Cloud16Icon))))
+
 #endregion ******** PIL Small Image Icons ********
 
 
@@ -13503,6 +13676,7 @@ Function Start-PILItemListContextMenuStripItemClick
           # Disable Main Menu Iteme
           $PILTopMenuStrip.Items["AddItems"].Enabled = $False
           $PILTopMenuStrip.Items["Configure"].Enabled = $False
+          $PILTopMenuStrip.Items["CloudLogon"].Enabled = $False
           $PILTopMenuStrip.Items["ProcessItems"].Enabled = $False
           $PILTopMenuStrip.Items["ListData"].Enabled = $False
           
@@ -14611,6 +14785,7 @@ function Start-PILTopMenuStripItemClick
             # Disable Main Menu Iteme
             $PILTopMenuStrip.Items["AddItems"].Enabled = $False
             $PILTopMenuStrip.Items["Configure"].Enabled = $False
+            $PILTopMenuStrip.Items["CloudLogon"].Enabled = $False
             $PILTopMenuStrip.Items["ProcessItems"].Enabled = $False
             $PILTopMenuStrip.Items["ListData"].Enabled = $False
             
@@ -14724,6 +14899,164 @@ function Start-PILTopMenuStripItemClick
       Break
       #endregion Clear Item List
     }
+    "CloudAz"
+    {
+      #region Login to Azure/EntraID
+      
+      $PILTopMenuStrip.Items["Configure"].DropdownItems["Examples"].DropDownItems | Where-Object -FilterScript { $PSItem.Tag -match "AzUser" } | ForEach-Object -Process { $PSItem.Enabled = $False }
+      [MyRuntime]::AzLogon = $False
+
+      if ($PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].ImageKey -eq "StatusGood16Icon")
+      {
+        $PILBtmStatusStrip.Items["Status"].Text = "Logoff from Azure/EntraID"
+        $PILBtmStatusStrip.Refresh()
+        Disconnect-AzAccount -ErrorAction SilentlyContinue
+        $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].ImageKey = "Cloud16Icon"
+      }
+      else
+      {
+        $PILBtmStatusStrip.Items["Status"].Text = "Login to Azure/EntraID"
+        $PILBtmStatusStrip.Refresh()
+        
+        $TmpModule = "Az.Accounts"
+        Import-Module -Name $TmpModule -RequiredVersion ([MyRuntime]::AzVersion) -ErrorAction SilentlyContinue
+        $ChkModule = Get-Module -Name $TmpModule
+        If ($ChkModule.Name -eq $TmpModule)
+        {
+          Disconnect-AzAccount -ErrorAction SilentlyContinue
+          
+          $OrderedItems = [Ordered]@{
+            "Tenant ID" = [MyRuntime]::TenantID
+            "Subscription ID" = [MyRuntime]::SubscriptionID
+          }
+          $DialogResult = Get-MultiTextBoxInput -Title "Get Multi Text Input" -Message "Enter the Tenant ID and Subscription ID of Azure/EntraID to Login to." -OrderedItems $OrderedItems -AllRequired
+          If ($DialogResult.Success)
+          {
+            Try
+            {
+              $TenantID = $DialogResult.OrderedItems["Tenant ID"]
+              $SubscriptionID = $DialogResult.OrderedItems["Subscription ID"]
+              
+              If (($TenantID -match "[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}") -and ($SubscriptionID -match "[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}"))
+              {
+                [MyRuntime]::TenantID = $TenantID
+                [MyRuntime]::SubscriptionID = $SubscriptionID
+                Update-AzConfig -EnableLoginByWam $False -DisplayBreakingChangeWarning $False -WarningAction SilentlyContinue | Out-Null
+                Connect-AzAccount -Tenant $TenantID -Subscription $SubscriptionID -Force -WarningAction SilentlyContinue -ErrorAction SilentlyContinue | Out-Null
+                $ChkLogon = Get-AzContext
+                if ([String]::IsNullOrEmpty($ChkLogon.Subscription.Id))
+                {
+                  $PILBtmStatusStrip.Items["Status"].Text = "Failed to Log in to Azure/EntraID"
+                  $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].ImageKey = "Cloud16Icon"
+                  $Response = Get-UserResponse -Title "Failed to Login" -Message "Failed to Login to Azure/Entra ID. Make Sure all Instaled Az Modules are from the Az Module Version 13.2.0" -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Warning)
+                }
+                else
+                {
+                  $PILBtmStatusStrip.Items["Status"].Text = "Successfully Logged in to Azure/EntraID"
+                  $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].ImageKey = "StatusGood16Icon"
+                  $PILTopMenuStrip.Items["Configure"].DropdownItems["Examples"].DropDownItems | Where-Object -FilterScript { $PSItem.Tag -match "AzUser" } | ForEach-Object -Process { $PSItem.Enabled = $True }
+                  [MyRuntime]::AzLogon = $True
+                  $Response = Get-UserResponse -Title "Successfull Logon" -Message "You have Successfully Logged in to Azure/EntraID." -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Information)
+                }
+              }
+              Else
+              {
+                $PILBtmStatusStrip.Items["Status"].Text = "Invalid Tenant and/or Subscription ID"
+                $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].ImageKey = "Cloud16Icon"
+                $Response = Get-UserResponse -Title "Failed to Login" -Message "You have Entered an Invalid Tenant and/or Subscription ID." -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Warning)
+              }
+            }
+            Catch
+            {
+              $PILBtmStatusStrip.Items["Status"].Text = "Error Logging in to Azure/EntraID"
+              $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].ImageKey = "Cloud16Icon"
+              $Response = Get-UserResponse -Title "Failed to Login" -Message "Failed to Login to Azure/Entra ID. Make Sure all Instaled Az Modules are from the Az Module Version 13.2.0" -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Error)
+            }
+          }
+          Else
+          {
+            $PILBtmStatusStrip.Items["Status"].Text = "Cancelled Logging in to Azure/EntraID"
+            $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].ImageKey = "Cloud16Icon"
+          }
+        }
+      }
+      Break
+      #endregion Login to Azure/EntraID
+    }
+    "CloudGraph"
+    {
+      #region Login to Microsoft Graph API
+      
+      $PILTopMenuStrip.Items["Configure"].DropdownItems["Examples"].DropDownItems | Where-Object -FilterScript { $PSItem.Tag -match "MgGraph" } | ForEach-Object -Process { $PSItem.Enabled = $False }
+      [MyRuntime]::GraphLogon = $False
+      
+      if ($PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].ImageKey -eq "StatusGood16Icon")
+      {
+        $PILBtmStatusStrip.Items["Status"].Text = "Logoff from Microsoft Graph API"
+        $PILBtmStatusStrip.Refresh()
+        Disconnect-MgGraph -ErrorAction SilentlyContinue
+        $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].ImageKey = "Cloud16Icon"
+      }
+      else
+      {
+        $PILBtmStatusStrip.Items["Status"].Text = "Login to Microsoft Graph API"
+        $PILBtmStatusStrip.Refresh()
+        
+        $TmpModule = "Microsoft.Graph.Authentication"
+        Import-Module -Name $TmpModule -RequiredVersion ([MyRuntime]::GraphVersion) -ErrorAction SilentlyContinue
+        $ChkModule = Get-Module -Name $TmpModule
+        If ($ChkModule.Name -eq $TmpModule)
+        {
+          Disconnect-MgGraph -ErrorAction SilentlyContinue
+          $DialogResult = Get-TextBoxInput -Title "Enter App Registration ClientID" -Message "Enter the ClientID of the Application Regisation to use for the Microsoft Graph API Logon." -Items ([MyRuntime]::ClientID)
+          If ($DialogResult.Success)
+          {
+            Try
+            {
+              $TmpClientID = $DialogResult.Text | Select-Object -First 1
+              If ($TmpClientID -match "[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}")
+              {
+                [MyRuntime]::ClientID = $TmpClientID
+                Connect-MgGraph -NoWelcome -ClientId $TmpClientID
+              }
+              Else
+              {
+                [MyRuntime]::ClientID = "Default"
+                Connect-MgGraph -NoWelcome
+              }
+              $ChkLogon = Get-MgContext
+              if ([String]::IsNullOrEmpty($ChkLogon.ClientID))
+              {
+                $PILBtmStatusStrip.Items["Status"].Text = "Failed to Log in to Microsoft Graph API"
+                $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].ImageKey = "Cloud16Icon"
+                $Response = Get-UserResponse -Title "Failed to Login" -Message "Failed to Login to Azure/Entra ID. Make Sure all Instaled Az Modules are from the Microsoft.Graph Module Version 2.28.0" -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Warning)
+              }
+              else
+              {
+                $PILBtmStatusStrip.Items["Status"].Text = "Successfully Logged in to Microsoft Graph API"
+                $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].ImageKey = "StatusGood16Icon"
+                $PILTopMenuStrip.Items["Configure"].DropdownItems["Examples"].DropDownItems | Where-Object -FilterScript { $PSItem.Tag -match "MgGraph" } | ForEach-Object -Process { $PSItem.Enabled = $True }
+                [MyRuntime]::GraphLogon = $True
+                $Response = Get-UserResponse -Title "Successfull Logon" -Message "You have Successfully Logged in to Microsoft.Graph." -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Information)
+              }
+            }
+            Catch
+            {
+              $PILBtmStatusStrip.Items["Status"].Text = "Error Logging in to Microsoft Graph API"
+              $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].ImageKey = "Cloud16Icon"
+              $Response = Get-UserResponse -Title "Failed to Login" -Message "Failed to Login to Azure/Entra ID. Make Sure all Instaled Az Modules are from the Microsoft.Graph Module Version 2.28.0" -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Error)
+            }
+          }
+          Else
+          {
+            $PILBtmStatusStrip.Items["Status"].Text = "Cancelled Logging in to Microsoft Graph API"
+            $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].ImageKey = "Cloud16Icon"
+          }
+        }
+      }
+      Break
+      #endregion Login to Microsoft Graph API
+    }
     "Sample"
     {
       #region Load Sample Configuration
@@ -14762,6 +15095,18 @@ function Start-PILTopMenuStripItemClick
           $ConfigName = "Get-DomainUsers"
           Break
         }
+        "MgGraphDevice"
+        {
+          $ConfigObject = $MgGraphDevice
+          $ConfigName = "MgGraph Device"
+          Break
+        }
+        "MgGraphUser"
+        {
+          $ConfigObject = $MgGraphUser
+          $ConfigName = "MgGraph User"
+          Break
+        }
         "GraphAPIDevice"
         {
           $ConfigObject = $GraphAPIDevice
@@ -14772,6 +15117,12 @@ function Start-PILTopMenuStripItemClick
         {
           $ConfigObject = $GraphAPIUser
           $ConfigName = "Graph API User"
+          Break
+        }
+        "AzUser"
+        {
+          $ConfigObject = $AzADUser
+          $ConfigName = "Get-AzADUser"
           Break
         }
       }
@@ -14869,12 +15220,21 @@ New-MenuSeparator -Menu $SubDropDownMenu
 (New-MenuItem -Menu $SubDropDownMenu -Text "Get Domain Computers" -Name "Sample" -Tag "GetDomainComps" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 (New-MenuItem -Menu $SubDropDownMenu -Text "Get Domain Users" -Name "Sample" -Tag "GetDomainUsers" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 New-MenuSeparator -Menu $SubDropDownMenu
+(New-MenuItem -Menu $SubDropDownMenu -Text "MgGraph Devices" -Name "Sample" -Tag "MgGraphDevice" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru -Disable).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $SubDropDownMenu -Text "MgGraph User" -Name "Sample" -Tag "MgGraphUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru -Disable).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+New-MenuSeparator -Menu $SubDropDownMenu
 (New-MenuItem -Menu $SubDropDownMenu -Text "Graph API Devices" -Name "Sample" -Tag "GraphAPIDevice" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 (New-MenuItem -Menu $SubDropDownMenu -Text "Graph API User" -Name "Sample" -Tag "GraphAPIUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+New-MenuSeparator -Menu $SubDropDownMenu
+(New-MenuItem -Menu $SubDropDownMenu -Text "Az Get-AzADUser" -Name "Sample" -Tag "AzUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru -Disable).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 New-MenuSeparator -Menu $SubDropDownMenu
 (New-MenuItem -Menu $SubDropDownMenu -Text "PIL Starter Config" -Name "Sample" -Tag "StarterConfig" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 New-MenuSeparator -Menu $SubDropDownMenu
 (New-MenuItem -Menu $SubDropDownMenu -Text "PIL Demo Script" -Name "Sample" -Tag "SampleDemo" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+
+$DropDownMenu = New-MenuItem -Menu $PILTopMenuStrip -Text "Cloud Logon $([char]0x00BB)" -Name "CloudLogon" -Tag "CloudLogon" -DisplayStyle "ImageAndText" -ImageKey "Cloud16Icon" -TextImageRelation "ImageBeforeText" -PassThru -Hide
+(New-MenuItem -Menu $DropDownMenu -Text "Az.Accounts" -Name "CloudAz" -Tag "CloudAz" -DisplayStyle "ImageAndText" -ImageKey "Cloud16Icon" -TextImageRelation "ImageBeforeText" -PassThru -Disable).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $DropDownMenu -Text "Microsoft.Graph.Authentication" -Name "CloudGraph" -Tag "CloudGraph" -DisplayStyle "ImageAndText" -ImageKey "Cloud16Icon" -TextImageRelation "ImageBeforeText" -PassThru -Disable).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 
 New-MenuSeparator -Menu $PILTopMenuStrip
 (New-MenuItem -Menu $PILTopMenuStrip -Text "Process Items" -Name "ProcessItems" -Tag "ProcessItems" -DisplayStyle "ImageAndText" -ImageKey "Process16Icon" -TextImageRelation "ImageBeforeText" -ClickOnCheck -Check -PassThru).add_Click({Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})

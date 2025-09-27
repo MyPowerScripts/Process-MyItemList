@@ -88,30 +88,21 @@ $UserPrincipalName = $ListViewItem.SubItems[$Columns["UserPrincipalName"]].Text
 
 Try
 {
-  $AuthToken = Get-MyOAuthApplicationToken -MyTenantID $TenantID -MyClientID $ClientID -MyClientSecret $ClientSecret
-  If ($AuthToken.Expires_In -eq 0)
+  $Resource = "/beta/users/$($UserPrincipalName)?`$select=id,displayname,mail,givenName,surname,accountEnabled"
+  $User = Invoke-MgGraphRequest -Uri $Resource -ErrorAction SilentlyContinue
+  If ([String]::IsNullOrEmpty($User.ID))
   {
-    $ListViewItem.SubItems[$Columns["Error Message"]].Text = "Unable to get AuthToken"
+    $ListViewItem.SubItems[$Columns["Error Message"]].Text = "No Device Found in Azure AD / Entra ID"
     $WasSuccess = $False
   }
   Else
   {
-    $Resource = "/users/$($UserPrincipalName)?`$select=id,displayname,mail,givenName,surname,accountEnabled"
-    $User = Get-MyGQuery -AuthToken $AuthToken -Resource $Resource -ErrorAction SilentlyContinue
-    If ([String]::IsNullOrEmpty($User.ID))
-    {
-      $ListViewItem.SubItems[$Columns["Error Message"]].Text = "No Device Found in Azure AD / Entra ID"
-      $WasSuccess = $False
-    }
-    Else
-    {
-      $ListViewItem.SubItems[$Columns["ID"]].Text = $User.ID
-      $ListViewItem.SubItems[$Columns["E-Mail"]].Text = $User.Mail
-      $ListViewItem.SubItems[$Columns["DisplayName"]].Text = $User.DisplayName
-      $ListViewItem.SubItems[$Columns["FirstName"]].Text = $User.GivenName
-      $ListViewItem.SubItems[$Columns["Surname"]].Text = $User.Surname
-      $ListViewItem.SubItems[$Columns["AccountEnabled"]].Text = $User.AccountEnabled
-    }
+    $ListViewItem.SubItems[$Columns["ID"]].Text = $User.ID
+    $ListViewItem.SubItems[$Columns["E-Mail"]].Text = $User.Mail
+    $ListViewItem.SubItems[$Columns["DisplayName"]].Text = $User.DisplayName
+    $ListViewItem.SubItems[$Columns["FirstName"]].Text = $User.GivenName
+    $ListViewItem.SubItems[$Columns["Surname"]].Text = $User.Surname
+    $ListViewItem.SubItems[$Columns["AccountEnabled"]].Text = $User.AccountEnabled
   }
 }
 Catch
@@ -139,5 +130,7 @@ Else
 }
 
 Exit
+
+
 
 

@@ -84,34 +84,29 @@ If ($SyncedHash.Terminate)
 # Sucess Default Exit Status
 $WasSuccess = $True
 $ListViewItem.SubItems[$Columns["Status Message"]].Text = "Processing"
-$UserPrincipalName = $ListViewItem.SubItems[$Columns["UserPrincipalName"]].Text
+$DisplayName = $ListViewItem.SubItems[$Columns["DisplayName"]].Text
 
 Try
 {
-  $AuthToken = Get-MyOAuthApplicationToken -MyTenantID $TenantID -MyClientID $ClientID -MyClientSecret $ClientSecret
-  If ($AuthToken.Expires_In -eq 0)
+  $Resource = ("/beta/devices?`$filter=displayName eq '{0}'&`$top=1&`$select=id,displayname,deviceId,deviceOwnership,trustType,manufacturer,model,operatingSystem,operatingSystemVersion,accountEnabled" -f $DisplayName)
+  $Device = Invoke-MgGraphRequest -Uri $Resource -ErrorAction SilentlyContinue
+  If ([String]::IsNullOrEmpty($Device.Value.ID))
   {
-    $ListViewItem.SubItems[$Columns["Error Message"]].Text = "Unable to get AuthToken"
+    $ListViewItem.SubItems[$Columns["Error Message"]].Text = "No Device Found in Azure AD / Entra ID"
     $WasSuccess = $False
   }
   Else
   {
-    $Resource = "/users/$($UserPrincipalName)?`$select=id,displayname,mail,givenName,surname,accountEnabled"
-    $User = Get-MyGQuery -AuthToken $AuthToken -Resource $Resource -ErrorAction SilentlyContinue
-    If ([String]::IsNullOrEmpty($User.ID))
-    {
-      $ListViewItem.SubItems[$Columns["Error Message"]].Text = "No Device Found in Azure AD / Entra ID"
-      $WasSuccess = $False
-    }
-    Else
-    {
-      $ListViewItem.SubItems[$Columns["ID"]].Text = $User.ID
-      $ListViewItem.SubItems[$Columns["E-Mail"]].Text = $User.Mail
-      $ListViewItem.SubItems[$Columns["DisplayName"]].Text = $User.DisplayName
-      $ListViewItem.SubItems[$Columns["FirstName"]].Text = $User.GivenName
-      $ListViewItem.SubItems[$Columns["Surname"]].Text = $User.Surname
-      $ListViewItem.SubItems[$Columns["AccountEnabled"]].Text = $User.AccountEnabled
-    }
+    $ListViewItem.SubItems[$Columns["DisplayName"]].Text = $Device.Value.DisplayName
+    $ListViewItem.SubItems[$Columns["ID"]].Text = $Device.Value.ID
+    $ListViewItem.SubItems[$Columns["DeviceID"]].Text = $Device.Value.DeviceID
+    $ListViewItem.SubItems[$Columns["DeviceOwnership"]].Text = $Device.Value.DeviceOwnership
+    $ListViewItem.SubItems[$Columns["TrustType"]].Text = $Device.Value.TrustType
+    $ListViewItem.SubItems[$Columns["Manufacturer"]].Text = $Device.Value.Manufacturer
+    $ListViewItem.SubItems[$Columns["Model"]].Text = $Device.Value.Model
+    $ListViewItem.SubItems[$Columns["OperatingSystem"]].Text = $Device.Value.OperatingSystem
+    $ListViewItem.SubItems[$Columns["OperatingSystemVersion"]].Text = $Device.Value.OperatingSystemVersion
+    $ListViewItem.SubItems[$Columns["AccountEnabled"]].Text = $Device.Value.AccountEnabled
   }
 }
 Catch
@@ -139,5 +134,7 @@ Else
 }
 
 Exit
+
+
 
 
