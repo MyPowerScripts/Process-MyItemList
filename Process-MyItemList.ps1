@@ -4,6 +4,12 @@
 <#
 Change Log for PIL
 ------------------------------------------------------------------------------------------------
+2.0.0.9 - Added Paramater to Use Any Version of the Az amd Microsoft.Graph Modules
+            This also Affects Moodules Used in Thread Configurations
+          Updated Install Modules Messages
+          When Loading PIL Config Files Config Clicking No at the Install Module Propmts no
+            longer Aborts the Loading of the PIL Config File
+------------------------------------------------------------------------------------------------
 2.0.0.8 - Add Suport for Loging in to Azure/Graph as Curent User
             Az.Accounts Version 4.0.2
               Only supports Modules from Az Version 13.2.0
@@ -48,6 +54,8 @@ Using namespace System.Collections.Specialized
     Path to Configuration File
   .PARAMETER ImportFile
     Path to Export File for Importind a PIL Data Export
+  .PARAMETER UseAny
+    Use Latest Version of Modules when Loading (Default No)
   .EXAMPLE
     Process-MyItemList.ps1 -StartColumns 10 -ConfigFile "C:\Temp\MyConfig.json" -ImportFile "C:\Temp\MyImport.csv"
   .NOTES
@@ -62,7 +70,9 @@ Param (
   [Parameter(Mandatory = $True, ParameterSetName = "ConfigFile")]
   [String]$ConfigFile,
   [Parameter(Mandatory = $False, ParameterSetName = "ConfigFile")]
-  [String]$ImportFile
+  [String]$ImportFile,
+  [ValidateSet("Yes", "No")]
+  [String]$UseAny = "No"
 )
 
 $ErrorActionPreference = "Stop"
@@ -172,7 +182,7 @@ Class MyConfig
   static [bool]$Production = $True
 
   static [String]$ScriptName = "Process-MyItemList"
-  static [Version]$ScriptVersion = [Version]::New("2.0.0.8")
+  static [Version]$ScriptVersion = [Version]::New("2.0.0.9")
   static [String]$ScriptAuthor = "Ken Sweet"
 
   # Script Configuration
@@ -455,15 +465,14 @@ Class MyRuntime
   # Azure / Enrta ID Logon
   Static [String]$TenantID = $Null
   Static [String]$SubscriptionID = $Null
-  Static [Bool]$AzLogon = $False
   Static [Version]$AzVersion = [Version]::New(4, 0, 2)
   
   # MgGraph Logon
   Static [String]$ClientID = "Default"
-  Static [bool]$GraphLogon = $False
   Static [Version]$GraphVersion = [Version]::New(2, 28, 0)
   
-  
+  Static [Bool]$UseAny = ($UseAny -eq "Yes")
+
   Static [String[]]$ConfigProperties = @("ColumnNames", "Modules", "Variables", "Functions", "ThreadCount", "ThreadScript", "Description")
   
   # Thread Configuration
@@ -8002,16 +8011,30 @@ Function Display-InitiliazePILUtility()
   # -------------------------
   # Display Passed Parameters
   # -------------------------
-  $CheckParams = $Script:PSBoundParameters
-  If ($CheckParams.Keys.Count)
-  {
-    Write-RichTextBox -RichTextBox $RichTextBox -Text "Runtime Parameters"
-    ForEach ($Key In $CheckParams.Keys)
-    {
-      $RichTextBox.SelectionIndent = 30
-      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text $Key -Value $($CheckParams[$Key])
-    }
-  }
+  $RichTextBox.SelectionIndent = 10
+  $RichTextBox.SelectionBullet = $False
+  Write-RichTextBox -RichTextBox $RichTextBox
+  Write-RichTextBox -RichTextBox $RichTextBox -Text "PIL Comand Line Parameters" -Font ([MyConfig]::Font.Bold) -TextFore ([MyConfig]::Colors.TextTitle)
+  $RichTextBox.SelectionBullet = $True
+  $RichTextBox.SelectionIndent = 20
+  Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "StartColumns" -Value $StartColumns
+  $RichTextBox.SelectionIndent = 30
+  Write-RichTextBox -RichTextBox $RichTextBox -Text "The Number of Intial Columns whe Starting $([MyConfig]::ScriptName) (5-24)"
+  
+  $RichTextBox.SelectionIndent = 20
+  Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "ConFigFile" -Value "'$([System.IO.Path]::GetFileName($ConfigFile))'"
+  $RichTextBox.SelectionIndent = 30
+  Write-RichTextBox -RichTextBox $RichTextBox -Text "The PIL Configuration File to Load for the Thread Configuration"
+  
+  $RichTextBox.SelectionIndent = 20
+  Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "ImportFile" -Value "'$([System.IO.Path]::GetFileName($ImportFile))'"
+  $RichTextBox.SelectionIndent = 30
+  Write-RichTextBox -RichTextBox $RichTextBox -Text "The PIL Export File to Import, Requires ConfigFile to be Specified"
+
+  $RichTextBox.SelectionIndent = 20
+  Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "UseAny" -Value $UseAny
+  $RichTextBox.SelectionIndent = 30
+  Write-RichTextBox -RichTextBox $RichTextBox -Text "Use the Any Version of the Az amd Microsoft.Graph Modules"
   
   #endregion ******** Validating Runtime Parameters ********
   
@@ -8035,11 +8058,11 @@ Function Display-InitiliazePILUtility()
   # Check for Az.Accounts
   If ([MyRuntime]::Modules.ContainsKey("Az.Accounts"))
   {
-    If ([MyRuntime]::Modules["Az.Accounts"].Version -eq [MyRuntime]::AzVersion)
+    If (([MyRuntime]::Modules["Az.Accounts"].Version -eq [MyRuntime]::AzVersion) -or [MyRuntime]::UseAny)
     {
       $PILTopMenuStrip.Items["CloudLogon"].Visible = $True
       $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].Enabled = $True
-      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Found Az.Accounts Version $([MyRuntime]::AzVersion)" -ValueFore ([MyConfig]::Colors.TextFore)
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Found Az.Accounts Version $([MyRuntime]::Modules["Az.Accounts"].Version)" -ValueFore ([MyConfig]::Colors.TextFore)
     }
     else
     {
@@ -8054,15 +8077,15 @@ Function Display-InitiliazePILUtility()
   # Check for Microsoft.Graph.Authentication
   If ([MyRuntime]::Modules.ContainsKey("Microsoft.Graph.Authentication"))
   {
-    If ([MyRuntime]::Modules["Microsoft.Graph.Authentication"].Version -eq [MyRuntime]::GraphVersion)
+    If (([MyRuntime]::Modules["Microsoft.Graph.Authentication"].Version -eq [MyRuntime]::GraphVersion) -or [MyRuntime]::UseAny)
     {
       $PILTopMenuStrip.Items["CloudLogon"].Visible = $True
       $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].Enabled = $True
-      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Found Microsoft.Graph.Authentication Version $([MyRuntime]::GraphVersion)" -ValueFore ([MyConfig]::Colors.TextFore)
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Found Microsoft.Graph.Authentication Version $([MyRuntime]::Modules["Microsoft.Graph.Authentication"].Version)" -ValueFore ([MyConfig]::Colors.TextFore)
     }
     else
     {
-      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "WARNING" -TextFore ([MyConfig]::Colors.TextWarn) -Value "Incorrect Microsoft.Graph.Authentication Version $([MyRuntime]::GraphVersion) was Found" -ValueFore ([MyConfig]::Colors.TextFore)
+      Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "WARNING" -TextFore ([MyConfig]::Colors.TextWarn) -Value "Incorrect Microsoft.Graph.Authentication Version was Found" -ValueFore ([MyConfig]::Colors.TextFore)
     }
   }
   else
@@ -8337,7 +8360,7 @@ Function Load-PILConfigFIleXml()
           
           If ([MyRuntime]::Modules.ContainsKey($Module.Name))
           {
-            If ([Version]::New([MyRuntime]::Modules[$Module.Name].Version) -ne [Version]::New($Module.Version))
+            If (([Version]::New([MyRuntime]::Modules[$Module.Name].Version) -ne [Version]::New($Module.Version)) -and (-not [MyRuntime]::UseAny))
             {
               $Response = Get-UserResponse -Title "Incorrect Module Version" -Message "The Module $($Module.Name) Version $($Module.Version) was not Found would you like to Install it to $($TmpInallMsg)?" -ButtonLeft Yes -ButtonRight No -ButtonDefault Yes -Icon ([System.Drawing.SystemIcons]::Question)
               If ($Response.Success)
@@ -8364,10 +8387,25 @@ Function Load-PILConfigFIleXml()
           }
           Else
           {
-            $Response = Get-UserResponse -Title "Module Not Instaled" -Message "The Module $($Module.Name) Version $($Module.Version) was not Found would you like to Install it to $($TmpInallMsg)?" -ButtonLeft Yes -ButtonRight No -ButtonDefault Yes -Icon ([System.Drawing.SystemIcons]::Question)
+            if ([MyRuntime]::UseAny)
+            {
+              $TmpMessage = "The Module $($Module.Name) was not Found would you like to Install it to $($TmpInallMsg)?"
+            }
+            else
+            {
+              $TmpMessage = "The Module $($Module.Name) Version $($Module.Value.Version) was not Found would you like to Install it to $($TmpInallMsg)?"
+            }
+            $Response = Get-UserResponse -Title "Module Not Instaled" -Message $TmpMessage -ButtonLeft Yes -ButtonRight No -ButtonDefault Yes -Icon ([System.Drawing.SystemIcons]::Question)
             If ($Response.Success)
             {
-              $ChkInstall = Install-MyModule -Name $Module.Name -Version $Module.Version -Scope $TmpScope -Install -NoImport
+              if ([MyRuntime]::UseAny)
+              {
+                $ChkInstall = Install-MyModule -Name $Module.Name -Scope $TmpScope -Install -NoImport
+              }
+              else
+              {
+                $ChkInstall = Install-MyModule -Name $Module.Name -Version $Module.Version -Scope $TmpScope -Install -NoImport
+              }
               If ($ChkInstall.Success)
               {
                 Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation was Successful" -ValueFore ([MyConfig]::Colors.TextFore)
@@ -8381,9 +8419,7 @@ Function Load-PILConfigFIleXml()
             }
             Else
             {
-              Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "FAILED" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation Failed" -ValueFore ([MyConfig]::Colors.TextFore)
-              $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
-              Break LoadMods
+              Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "WARNING" -TextFore ([MyConfig]::Colors.TextwARN) -Value "Skipped Module $($Module.Name) Installation" -ValueFore ([MyConfig]::Colors.TextFore)
             }
           }
           
@@ -8655,55 +8691,68 @@ Function Load-PILConfigFIleJson()
           Write-RichTextBoxValue -RichTextBox $RichTextBox -Text $Module.Name -Value $Module.Value.Version
           $RichTextBox.SelectionIndent = 40
           
-          If ([MyRuntime]::Modules.ContainsKey($Module.Name))
+          if ([MyRuntime]::Modules.ContainsKey($Module.Name))
           {
-            If ([Version]::New([MyRuntime]::Modules[$Module.Name].Version) -ne [Version]::New($Module.Value.Version))
+            if (([Version]::New([MyRuntime]::Modules[$Module.Name].Version) -ne [Version]::New($Module.Version)) -and (-not [MyRuntime]::UseAny))
             {
-              $Response = Get-UserResponse -Title "Incorrect Module Version" -Message "The Module $($Module.Name) Version $($Module.Value.Version) was not Found would you like to Install it to $($TmpInallMsg)?" -ButtonLeft Yes -ButtonRight No -ButtonDefault Yes -Icon ([System.Drawing.SystemIcons]::Question)
-              If ($Response.Success)
+              $Response = Get-UserResponse -Title "Incorrect Module Version" -Message "The Module $($Module.Name) Version $($Module.Version) was not Found would you like to Install it to $($TmpInallMsg)?" -ButtonLeft Yes -ButtonRight No -ButtonDefault Yes -Icon ([System.Drawing.SystemIcons]::Question)
+              if ($Response.Success)
               {
-                $ChkInstall = Install-MyModule -Name $Module.Name -Version $Module.Value.Version -Scope $TmpScope -Install -NoImport
-                If ($ChkInstall.Success)
+                $ChkInstall = Install-MyModule -Name $Module.Name -Version $Module.Version -Scope $TmpScope -Install -NoImport
+                if ($ChkInstall.Success)
                 {
                   Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation was Successful" -ValueFore ([MyConfig]::Colors.TextFore)
                 }
-                Else
+                else
                 {
                   Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "FAILED" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation Failed" -ValueFore ([MyConfig]::Colors.TextFore)
                   $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
-                  Break LoadMods
+                  break LoadMods
                 }
               }
-              Else
+              else
               {
                 Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "FAILED" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation Failed" -ValueFore ([MyConfig]::Colors.TextFore)
                 $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
-                Break LoadMods
+                break LoadMods
               }
             }
           }
-          Else
+          else
           {
-            $Response = Get-UserResponse -Title "Module Not Instaled" -Message "The Module $($Module.Name) Version $($Module.Value.Version) was not Found would you like to Install it to $($TmpInallMsg)?" -ButtonLeft Yes -ButtonRight No -ButtonDefault Yes -Icon ([System.Drawing.SystemIcons]::Question)
-            If ($Response.Success)
+            if ([MyRuntime]::UseAny)
             {
-              $ChkInstall = Install-MyModule -Name $Module.Name -Version $Module.Value.Version -Scope $TmpScope -Install -NoImport
-              If ($ChkInstall.Success)
+              $TmpMessage = "The Module $($Module.Name) was not Found would you like to Install it to $($TmpInallMsg)?"
+            }
+            else
+            {
+              $TmpMessage = "The Module $($Module.Name) Version $($Module.Value.Version) was not Found would you like to Install it to $($TmpInallMsg)?"
+            }
+            $Response = Get-UserResponse -Title "Module Not Instaled" -Message $TmpMessage -ButtonLeft Yes -ButtonRight No -ButtonDefault Yes -Icon ([System.Drawing.SystemIcons]::Question)
+            if ($Response.Success)
+            {
+              if ([MyRuntime]::UseAny)
+              {
+                $ChkInstall = Install-MyModule -Name $Module.Name -Scope $TmpScope -Install -NoImport
+              }
+              else
+              {
+                $ChkInstall = Install-MyModule -Name $Module.Name -Version $Module.Version -Scope $TmpScope -Install -NoImport
+              }
+              if ($ChkInstall.Success)
               {
                 Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation was Successful" -ValueFore ([MyConfig]::Colors.TextFore)
               }
-              Else
+              else
               {
                 Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "FAILED" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation Failed" -ValueFore ([MyConfig]::Colors.TextFore)
                 $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
-                Break LoadMods
+                break LoadMods
               }
             }
-            Else
+            else
             {
-              Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "FAILED" -TextFore ([MyConfig]::Colors.TextBad) -Value "Module $($Module.Name) Installation Failed" -ValueFore ([MyConfig]::Colors.TextFore)
-              $DisplayResult = [System.Windows.Forms.DialogResult]::Cancel
-              Break LoadMods
+              Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "WARNING" -TextFore ([MyConfig]::Colors.TextWarn) -Value "Skipped Module $($Module.Name) Installation" -ValueFore ([MyConfig]::Colors.TextFore)
             }
           }
           
@@ -11361,21 +11410,15 @@ function Update-ThreadConfiguration ()
   New-MenuSeparator -Menu $DropDownMenu
   (New-MenuItem -Menu $DropDownMenu -Text "Get Domain Computers" -Name "Sample" -Tag "GetDomainComps" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   (New-MenuItem -Menu $DropDownMenu -Text "Get Domain Users" -Name "Sample" -Tag "GetDomainUsers" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
-  if ([MyRuntime]::GraphLogon)
-  {
-    New-MenuSeparator -Menu $DropDownMenu
-    (New-MenuItem -Menu $DropDownMenu -Text "MgGraph Devices" -Name "Sample" -Tag "MgGraphDevice" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
-    (New-MenuItem -Menu $DropDownMenu -Text "MgGraph User" -Name "Sample" -Tag "MgGraphUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
-  }
+  New-MenuSeparator -Menu $DropDownMenu
+  (New-MenuItem -Menu $DropDownMenu -Text "MgGraph Devices" -Name "Sample" -Tag "MgGraphDevice" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+  (New-MenuItem -Menu $DropDownMenu -Text "MgGraph User" -Name "Sample" -Tag "MgGraphUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   New-MenuSeparator -Menu $DropDownMenu
   (New-MenuItem -Menu $DropDownMenu -Text "Graph API Devices" -Name "Sample" -Tag "GraphAPIDevice" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   (New-MenuItem -Menu $DropDownMenu -Text "Graph API User" -Name "Sample" -Tag "GraphAPIUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
-  if ([MyRuntime]::AzLogon)
-  {
-    New-MenuSeparator -Menu $DropDownMenu
-    (New-MenuItem -Menu $DropDownMenu -Text "Az Get-AzADUser" -Name "Sample" -Tag "AzUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
-    New-MenuSeparator -Menu $DropDownMenu
-  }
+  New-MenuSeparator -Menu $DropDownMenu
+  (New-MenuItem -Menu $DropDownMenu -Text "Az Get-AzADUser" -Name "Sample" -Tag "AzUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
+  New-MenuSeparator -Menu $DropDownMenu
   New-MenuSeparator -Menu $DropDownMenu
   (New-MenuItem -Menu $DropDownMenu -Text "PIL Starter Config" -Name "Sample" -Tag "StarterConfig" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   New-MenuSeparator -Menu $DropDownMenu
@@ -14902,9 +14945,6 @@ function Start-PILTopMenuStripItemClick
     "CloudAz"
     {
       #region Login to Azure/EntraID
-      
-      $PILTopMenuStrip.Items["Configure"].DropdownItems["Examples"].DropDownItems | Where-Object -FilterScript { $PSItem.Tag -match "AzUser" } | ForEach-Object -Process { $PSItem.Enabled = $False }
-      [MyRuntime]::AzLogon = $False
 
       if ($PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].ImageKey -eq "StatusGood16Icon")
       {
@@ -14919,7 +14959,14 @@ function Start-PILTopMenuStripItemClick
         $PILBtmStatusStrip.Refresh()
         
         $TmpModule = "Az.Accounts"
-        Import-Module -Name $TmpModule -RequiredVersion ([MyRuntime]::AzVersion) -ErrorAction SilentlyContinue
+        if ([MyRuntime]::UseAny)
+        {
+          Import-Module -Name $TmpModule -ErrorAction SilentlyContinue
+        }
+        else
+        {
+          Import-Module -Name $TmpModule -RequiredVersion ([MyRuntime]::AzVersion) -ErrorAction SilentlyContinue
+        }
         $ChkModule = Get-Module -Name $TmpModule
         If ($ChkModule.Name -eq $TmpModule)
         {
@@ -14954,8 +15001,6 @@ function Start-PILTopMenuStripItemClick
                 {
                   $PILBtmStatusStrip.Items["Status"].Text = "Successfully Logged in to Azure/EntraID"
                   $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].ImageKey = "StatusGood16Icon"
-                  $PILTopMenuStrip.Items["Configure"].DropdownItems["Examples"].DropDownItems | Where-Object -FilterScript { $PSItem.Tag -match "AzUser" } | ForEach-Object -Process { $PSItem.Enabled = $True }
-                  [MyRuntime]::AzLogon = $True
                   $Response = Get-UserResponse -Title "Successfull Logon" -Message "You have Successfully Logged in to Azure/EntraID." -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Information)
                 }
               }
@@ -14979,6 +15024,12 @@ function Start-PILTopMenuStripItemClick
             $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].ImageKey = "Cloud16Icon"
           }
         }
+        else
+        {
+          $PILBtmStatusStrip.Items["Status"].Text = "Microsoft Az.Accounts Module was Not Imported"
+          $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].ImageKey = "Cloud16Icon"
+          $Response = Get-UserResponse -Title "Module Not Imported" -Message "The Az.Accounts Module was not Imported." -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Error)
+        }
       }
       Break
       #endregion Login to Azure/EntraID
@@ -14986,9 +15037,6 @@ function Start-PILTopMenuStripItemClick
     "CloudGraph"
     {
       #region Login to Microsoft Graph API
-      
-      $PILTopMenuStrip.Items["Configure"].DropdownItems["Examples"].DropDownItems | Where-Object -FilterScript { $PSItem.Tag -match "MgGraph" } | ForEach-Object -Process { $PSItem.Enabled = $False }
-      [MyRuntime]::GraphLogon = $False
       
       if ($PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].ImageKey -eq "StatusGood16Icon")
       {
@@ -15003,7 +15051,15 @@ function Start-PILTopMenuStripItemClick
         $PILBtmStatusStrip.Refresh()
         
         $TmpModule = "Microsoft.Graph.Authentication"
-        Import-Module -Name $TmpModule -RequiredVersion ([MyRuntime]::GraphVersion) -ErrorAction SilentlyContinue
+
+        if ([MyRuntime]::UseAny)
+        {
+          Import-Module -Name $TmpModule -ErrorAction SilentlyContinue
+        }
+        else
+        {
+          Import-Module -Name $TmpModule -RequiredVersion ([MyRuntime]::GraphVersion) -ErrorAction SilentlyContinue
+        }
         $ChkModule = Get-Module -Name $TmpModule
         If ($ChkModule.Name -eq $TmpModule)
         {
@@ -15035,8 +15091,6 @@ function Start-PILTopMenuStripItemClick
               {
                 $PILBtmStatusStrip.Items["Status"].Text = "Successfully Logged in to Microsoft Graph API"
                 $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].ImageKey = "StatusGood16Icon"
-                $PILTopMenuStrip.Items["Configure"].DropdownItems["Examples"].DropDownItems | Where-Object -FilterScript { $PSItem.Tag -match "MgGraph" } | ForEach-Object -Process { $PSItem.Enabled = $True }
-                [MyRuntime]::GraphLogon = $True
                 $Response = Get-UserResponse -Title "Successfull Logon" -Message "You have Successfully Logged in to Microsoft.Graph." -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Information)
               }
             }
@@ -15052,6 +15106,12 @@ function Start-PILTopMenuStripItemClick
             $PILBtmStatusStrip.Items["Status"].Text = "Cancelled Logging in to Microsoft Graph API"
             $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].ImageKey = "Cloud16Icon"
           }
+        }
+        else
+        {
+          $PILBtmStatusStrip.Items["Status"].Text = "Microsoft.Graph.Authentication Module Not Imported"
+          $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].ImageKey = "Cloud16Icon"
+          $Response = Get-UserResponse -Title "Module Not Imported" -Message "The Microsoft.Graph.Authentication Module was not Imported." -ButtonMid OK -ButtonDefault OK -Icon ([System.Drawing.SystemIcons]::Error)
         }
       }
       Break
@@ -15220,13 +15280,13 @@ New-MenuSeparator -Menu $SubDropDownMenu
 (New-MenuItem -Menu $SubDropDownMenu -Text "Get Domain Computers" -Name "Sample" -Tag "GetDomainComps" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 (New-MenuItem -Menu $SubDropDownMenu -Text "Get Domain Users" -Name "Sample" -Tag "GetDomainUsers" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 New-MenuSeparator -Menu $SubDropDownMenu
-(New-MenuItem -Menu $SubDropDownMenu -Text "MgGraph Devices" -Name "Sample" -Tag "MgGraphDevice" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru -Disable).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
-(New-MenuItem -Menu $SubDropDownMenu -Text "MgGraph User" -Name "Sample" -Tag "MgGraphUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru -Disable).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $SubDropDownMenu -Text "MgGraph Devices" -Name "Sample" -Tag "MgGraphDevice" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $SubDropDownMenu -Text "MgGraph User" -Name "Sample" -Tag "MgGraphUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 New-MenuSeparator -Menu $SubDropDownMenu
 (New-MenuItem -Menu $SubDropDownMenu -Text "Graph API Devices" -Name "Sample" -Tag "GraphAPIDevice" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 (New-MenuItem -Menu $SubDropDownMenu -Text "Graph API User" -Name "Sample" -Tag "GraphAPIUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 New-MenuSeparator -Menu $SubDropDownMenu
-(New-MenuItem -Menu $SubDropDownMenu -Text "Az Get-AzADUser" -Name "Sample" -Tag "AzUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru -Disable).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
+(New-MenuItem -Menu $SubDropDownMenu -Text "Az Get-AzADUser" -Name "Sample" -Tag "AzUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 New-MenuSeparator -Menu $SubDropDownMenu
 (New-MenuItem -Menu $SubDropDownMenu -Text "PIL Starter Config" -Name "Sample" -Tag "StarterConfig" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTopMenuStripItemClick -Sender $This -EventArg $PSItem})
 New-MenuSeparator -Menu $SubDropDownMenu
