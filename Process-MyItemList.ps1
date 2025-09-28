@@ -5,7 +5,7 @@
 Change Log for PIL
 ------------------------------------------------------------------------------------------------
 2.0.0.9 - Added Paramater to Use Any Version of the Az amd Microsoft.Graph Modules
-            This also Affects Moodules Used in Thread Configurations
+            This also Affects Modules Used in Thread Configurations
           Updated Install Modules Messages
           When Loading PIL Config Files Config Clicking No at the Install Module Propmts no
             longer Aborts the Loading of the PIL Config File
