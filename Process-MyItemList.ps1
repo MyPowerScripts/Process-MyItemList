@@ -11419,7 +11419,6 @@ function Update-ThreadConfiguration ()
   New-MenuSeparator -Menu $DropDownMenu
   (New-MenuItem -Menu $DropDownMenu -Text "Az Get-AzADUser" -Name "Sample" -Tag "AzUser" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   New-MenuSeparator -Menu $DropDownMenu
-  New-MenuSeparator -Menu $DropDownMenu
   (New-MenuItem -Menu $DropDownMenu -Text "PIL Starter Config" -Name "Sample" -Tag "StarterConfig" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
   New-MenuSeparator -Menu $DropDownMenu
   (New-MenuItem -Menu $DropDownMenu -Text "PIL Demo Script" -Name "Sample" -Tag "SampleDemo" -DisplayStyle "ImageAndText" -ImageKey "Demo16Icon" -PassThru).add_Click({ Start-PILTCDescriptionContextMenuStripItemClick -Sender $This -EventArg $PSItem})
