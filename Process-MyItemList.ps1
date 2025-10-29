@@ -8947,10 +8947,10 @@ Function Load-PILDataExport()
           }
           If (($PILItemListListView.Items.Count % $FivePercent) -eq 0)
           {
-            Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Items Processed" -Value ("{0:P}" -f ($PILItemListListView.Items.Count / $TmpExport.Count))
+            Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "PIL Data Imported" -Value ("{0:P}" -f ($PILItemListListView.Items.Count / $TmpExport.Count))
           }
         }
-        Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Items Processed" -Value ("{0:P}" -f 1)
+        Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "PIL Data Imported" -Value ("{0:P}" -f 1)
         
         $PILItemListListView.EndUpdate()
         Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Imported $($PILItemListListView.Items.Count - $TmpCurRowCount) List Items" -ValueFore ([MyConfig]::Colors.TextFore)
