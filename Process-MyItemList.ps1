@@ -8936,7 +8936,7 @@ Function Load-PILDataExport()
         $TmpCurRowCount = $PILItemListListView.Items.Count
         $TmpDataList = $TmpExport | Select-Object -Property $ChkColumns
         $PILItemListListView.BeginUpdate()
-        $FivePercent = [System.Math]::Ceiling($TmpExport.Count / 20)
+        $FivePercent = [System.Math]::Ceiling($TmpExport.Count / 25)
         ForEach ($TmpDataItem In $TmpDataList)
         {
           $TmpName = $TmpDataItem."$($ChkColumns[0])"
@@ -8947,7 +8947,7 @@ Function Load-PILDataExport()
           }
           If (($PILItemListListView.Items.Count % $FivePercent) -eq 0)
           {
-            Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Items Processed" -Value ("0:P" -f ($PILItemListListView.Items.Count / $TmpExport.Count))
+            Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Items Processed" -Value ("{0:P}" -f ($PILItemListListView.Items.Count / $TmpExport.Count))
           }
         }
         Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Items Processed" -Value ("{0:P}" -f 1)
