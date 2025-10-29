@@ -4,6 +4,8 @@
 <#
 Change Log for PIL
 ------------------------------------------------------------------------------------------------
+2.0.1.0 - Add Load Percentage for Load PIL Data List
+------------------------------------------------------------------------------------------------
 2.0.0.9 - Added Paramater to Use Any Version of the Az amd Microsoft.Graph Modules
             This also Affects Modules Used in Thread Configurations
           Updated Install Modules Messages
@@ -182,7 +184,7 @@ Class MyConfig
   static [bool]$Production = $True
 
   static [String]$ScriptName = "Process-MyItemList"
-  static [Version]$ScriptVersion = [Version]::New("2.0.0.9")
+  static [Version]$ScriptVersion = [Version]::New("2.0.1.0")
   static [String]$ScriptAuthor = "Ken Sweet"
 
   # Script Configuration
@@ -8934,6 +8936,7 @@ Function Load-PILDataExport()
         $TmpCurRowCount = $PILItemListListView.Items.Count
         $TmpDataList = $TmpExport | Select-Object -Property $ChkColumns
         $PILItemListListView.BeginUpdate()
+        $FivePercent = [System.Math]::Ceiling($TmpExport.Count / 20)
         ForEach ($TmpDataItem In $TmpDataList)
         {
           $TmpName = $TmpDataItem."$($ChkColumns[0])"
@@ -8942,7 +8945,12 @@ Function Load-PILDataExport()
             $TmpDataItem.FakeColumn = ""
             ($PILItemListListView.Items.Add([System.Windows.Forms.ListViewItem]::New(@($TmpDataItem.PSObject.Properties | Select-Object -ExpandProperty Value), "StatusInfo16Icon", [MyConfig]::Colors.TextFore, [MyConfig]::Colors.TextBack, [MyConfig]::Font.Regular))).Name = $TmpName
           }
+          If (($PILItemListListView.Items.Count % $FivePercent) -eq 0)
+          {
+            Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Items Processed" -Value ("0:P" -f ($PILItemListListView.Items.Count / $TmpExport.Count))
+          }
         }
+        Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Items Processed" -Value ("{0:P}" -f 1)
         
         $PILItemListListView.EndUpdate()
         Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Imported $($PILItemListListView.Items.Count - $TmpCurRowCount) List Items" -ValueFore ([MyConfig]::Colors.TextFore)
