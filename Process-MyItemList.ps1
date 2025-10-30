@@ -8939,11 +8939,12 @@ Function Load-PILDataExport()
         $FivePercent = [System.Math]::Ceiling($TmpExport.Count / 20)
         ForEach ($TmpDataItem In $TmpDataList)
         {
-          $TmpName = ($TmpDataItem."$($ChkColumns[0])").ToUpper()
-          If (-not $PILItemListListView.Items.ContainsKey($TmpName))
-          {
-            ($PILItemListListView.Items.Add([System.Windows.Forms.ListViewItem]::New(@($TmpDataItem.PSObject.Properties.Value), "StatusInfo16Icon", [MyConfig]::Colors.TextFore, [MyConfig]::Colors.TextBack, [MyConfig]::Font.Regular))).Name = $TmpName
-          }
+          #$TmpName = ($TmpDataItem."$($ChkColumns[0])").ToUpper()
+          #If (-not $PILItemListListView.Items.ContainsKey($TmpName))
+          #{
+          #  ($PILItemListListView.Items.Add([System.Windows.Forms.ListViewItem]::New(@($TmpDataItem.PSObject.Properties.Value), "StatusInfo16Icon", [MyConfig]::Colors.TextFore, [MyConfig]::Colors.TextBack, [MyConfig]::Font.Regular))).Name = $TmpName
+          #}
+          [Void]$PILItemListListView.Items.Add([System.Windows.Forms.ListViewItem]::New(@($TmpDataItem.PSObject.Properties.Value), "StatusInfo16Icon", [MyConfig]::Colors.TextFore, [MyConfig]::Colors.TextBack, [MyConfig]::Font.Regular))
           If (($PILItemListListView.Items.Count % $FivePercent) -eq 0)
           {
             Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "PIL Data Imported" -Value ("{0:P}" -f ($PILItemListListView.Items.Count / $TmpExport.Count))
@@ -14440,15 +14441,15 @@ function Start-PILTopMenuStripItemClick
         $PILItemListListView.BeginUpdate()
         ForEach ($TmpItem In $DialogResult.Items)
         {
-          If (-not $PILItemListListView.Items.ContainsKey($TmpItem))
-          {
+          #If (-not $PILItemListListView.Items.ContainsKey($TmpItem))
+          #{
             $TmpListItem = [System.Windows.Forms.ListViewItem]::New($TmpItem, "StatusInfo16Icon", [MyConfig]::Colors.TextFore, [MyConfig]::Colors.TextBack, [MyConfig]::Font.Regular)
-            $TmpListItem.Name = $TmpItem
+            #$TmpListItem.Name = $TmpItem
             #$TmpListItem.SubItems.AddRange($TmpSubItems)
             $TmpListItem.SubItems.AddRange([System.Windows.Forms.ListViewItem+ListViewSubItem[]]@((1..([MyRuntime]::CurrentColumns)) | ForEach-Object -Process { [System.Windows.Forms.ListViewItem+ListViewSubItem]::New($TmpListItem, "") }))
             [Void]$PILItemListListView.Items.Add($TmpListItem)
             $NewCount++
-          }
+          #}
         }
         $PILItemListListView.EndUpdate()
         
@@ -14525,15 +14526,15 @@ function Start-PILTopMenuStripItemClick
             $PILItemListListView.BeginUpdate()
             ForEach ($TmpItem In $TmpItems)
             {
-              If (-not $PILItemListListView.Items.ContainsKey($TmpItem))
-              {
+              #If (-not $PILItemListListView.Items.ContainsKey($TmpItem))
+              #{
                 $TmpListItem = [System.Windows.Forms.ListViewItem]::New($TmpItem, "StatusInfo16Icon", [MyConfig]::Colors.TextFore, [MyConfig]::Colors.TextBack, [MyConfig]::Font.Regular)
-                $TmpListItem.Name = $TmpItem
+                #$TmpListItem.Name = $TmpItem
                 #$TmpListItem.SubItems.AddRange($TmpSubItems)
                 $TmpListItem.SubItems.AddRange([System.Windows.Forms.ListViewItem+ListViewSubItem[]]@((1..([MyRuntime]::CurrentColumns)) | ForEach-Object -Process { [System.Windows.Forms.ListViewItem+ListViewSubItem]::New($TmpListItem, "") }))
                 [Void]$PILItemListListView.Items.Add($TmpListItem)
                 $NewCount++
-              }
+              #}
             }
             $PILItemListListView.Columns[0].Width = -2
             $PILItemListListView.EndUpdate()
