@@ -8919,7 +8919,7 @@ Function Load-PILDataExport()
       # Load Configuration
       $TmpExport = Import-Csv -LiteralPath $ImportFile
       Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "SUCCESS" -TextFore ([MyConfig]::Colors.TextGood) -Value "Found PIL Data Export File" -ValueFore ([MyConfig]::Colors.TextFore)
-      $TmpImportCols = @($TmpExport[0].PSObject.Properties | Select-Object -ExpandProperty Name)
+      $TmpImportCols = @($TmpExport[0].PSObject.Properties.Name)
       
       $RichTextBox.SelectionIndent = 20
       Write-RichTextBox -RichTextBox $RichTextBox -Text "Validateing PIL Export Data Columns"
@@ -8934,16 +8934,15 @@ Function Load-PILDataExport()
         Write-RichTextBoxValue -RichTextBox $RichTextBox -Text "Processing Data Export" -Value "Importing $($TmpExport.Count) List Items"
         $RichTextBox.SelectionIndent = 30
         $TmpCurRowCount = $PILItemListListView.Items.Count
-        $TmpDataList = $TmpExport | Select-Object -Property $ChkColumns
+        $TmpDataList = $TmpExport | Select-Object -Property $ChkColumns | Select-Object -Property *, @{ N = "FakeColumns"; E = { "" } }
         $PILItemListListView.BeginUpdate()
-        $FivePercent = [System.Math]::Ceiling($TmpExport.Count / 25)
+        $FivePercent = [System.Math]::Ceiling($TmpExport.Count / 20)
         ForEach ($TmpDataItem In $TmpDataList)
         {
-          $TmpName = $TmpDataItem."$($ChkColumns[0])"
+          $TmpName = ($TmpDataItem."$($ChkColumns[0])").ToUpper()
           If (-not $PILItemListListView.Items.ContainsKey($TmpName))
           {
-            $TmpDataItem.FakeColumn = ""
-            ($PILItemListListView.Items.Add([System.Windows.Forms.ListViewItem]::New(@($TmpDataItem.PSObject.Properties | Select-Object -ExpandProperty Value), "StatusInfo16Icon", [MyConfig]::Colors.TextFore, [MyConfig]::Colors.TextBack, [MyConfig]::Font.Regular))).Name = $TmpName
+            ($PILItemListListView.Items.Add([System.Windows.Forms.ListViewItem]::New(@($TmpDataItem.PSObject.Properties.Value), "StatusInfo16Icon", [MyConfig]::Colors.TextFore, [MyConfig]::Colors.TextBack, [MyConfig]::Font.Regular))).Name = $TmpName
           }
           If (($PILItemListListView.Items.Count % $FivePercent) -eq 0)
           {
