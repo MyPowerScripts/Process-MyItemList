@@ -4,6 +4,8 @@
 <#
 Change Log for PIL
 ------------------------------------------------------------------------------------------------
+2.0.1.1 - Chnage to Use Az.Account/MgGraph Modules >= Configured Version
+------------------------------------------------------------------------------------------------
 2.0.1.0 - Add Load Percentage for Load PIL Data List
 ------------------------------------------------------------------------------------------------
 2.0.0.9 - Added Paramater to Use Any Version of the Az amd Microsoft.Graph Modules
@@ -184,7 +186,7 @@ Class MyConfig
   static [bool]$Production = $True
 
   static [String]$ScriptName = "Process-MyItemList"
-  static [Version]$ScriptVersion = [Version]::New("2.0.1.0")
+  static [Version]$ScriptVersion = [Version]::New("2.0.1.1")
   static [String]$ScriptAuthor = "Ken Sweet"
 
   # Script Configuration
@@ -2734,7 +2736,8 @@ function Wait-MyRSJob()
     else
     {
       $StopWatch = [System.Diagnostics.Stopwatch]::StartNew()
-      while ((@(($WaitJobs | Where-Object -FilterScript { $PSItem.State -notmatch "Stopped|Completed|Failed" }| Where-Object -FilterScript { -not [String]::IsNullOrEmpty($PSItem) })).Count -gt 0) -and (($StopWatch.TotalSeconds -le $Wait) -or ($Wait -eq 0)))
+      #while ((@(($WaitJobs | Where-Object -FilterScript { $PSItem.State -notmatch "Stopped|Completed|Failed" } | Where-Object -FilterScript { -not [String]::IsNullOrEmpty($PSItem) })).Count -gt 0) -and (($StopWatch.TotalSeconds -le $Wait) -or ($Wait -eq 0)))
+      while ((@(($WaitJobs | Where-Object -FilterScript { $PSItem.State -notmatch "Stopped|Completed|Failed" })).Count -gt 0) -and (($StopWatch.TotalSeconds -le $Wait) -or ($Wait -eq 0)))
       {
         $SciptBlock.Invoke()
       }
@@ -8060,7 +8063,7 @@ Function Display-InitiliazePILUtility()
   # Check for Az.Accounts
   If ([MyRuntime]::Modules.ContainsKey("Az.Accounts"))
   {
-    If (([MyRuntime]::Modules["Az.Accounts"].Version -eq [MyRuntime]::AzVersion) -or [MyRuntime]::UseAny)
+    If (([MyRuntime]::Modules["Az.Accounts"].Version -ge [MyRuntime]::AzVersion) -or [MyRuntime]::UseAny)
     {
       $PILTopMenuStrip.Items["CloudLogon"].Visible = $True
       $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudAz"].Enabled = $True
@@ -8079,7 +8082,7 @@ Function Display-InitiliazePILUtility()
   # Check for Microsoft.Graph.Authentication
   If ([MyRuntime]::Modules.ContainsKey("Microsoft.Graph.Authentication"))
   {
-    If (([MyRuntime]::Modules["Microsoft.Graph.Authentication"].Version -eq [MyRuntime]::GraphVersion) -or [MyRuntime]::UseAny)
+    If (([MyRuntime]::Modules["Microsoft.Graph.Authentication"].Version -ge [MyRuntime]::GraphVersion) -or [MyRuntime]::UseAny)
     {
       $PILTopMenuStrip.Items["CloudLogon"].Visible = $True
       $PILTopMenuStrip.Items["CloudLogon"].DropDownItems["CloudGraph"].Enabled = $True
@@ -9958,10 +9961,16 @@ Function Monitor-RunspacePoolThreads ()
       $PILLeftProgressBar.Increment(1)
       $PILRightProgressBar.Increment(1)
     }
+    #ForEach ($Job In $JobsDone)
+    #{
+      #$PILLeftProgressBar.Increment(1)
+      #$PILRightProgressBar.Increment(1)
+    #}
+    #$JobsDone | Receive-MyRSJob -AutoRemove -Force | Out-Null
     $PILLeftProgressBar.Refresh()
     $PILRightProgressBar.Refresh()
     [System.Windows.Forms.Application]::DoEvents()
-    [System.Threading.Thread]::Sleep(100)
+    [System.Threading.Thread]::Sleep(250)
   }
   
   Try
